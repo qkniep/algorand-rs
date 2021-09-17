@@ -1,0 +1,11 @@
+[package]
+name = "algorsand"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+ed25519 = "1"
+lazy_static = "1"
+libsecp256k1 = "0.7"
+rand = "0.8"
+sha2 = "0.9"
