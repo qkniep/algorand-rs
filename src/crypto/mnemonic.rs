@@ -79,11 +79,11 @@ fn mnemonic_to_key(mnemonic: &Vec<String>) -> Result<[u8; KEY_LEN_BYTES], Mnemon
     // convert to bytes, excluding the checksum word's base11 value
     let mut bytes = to_base8(&base11[..base11.len() - 1]);
 
-    // We need to chop the last byte -
-    // the short explanation - Since 256 is not divisible by 11, we have an extra 0x0 byte.
+    // We need to chop the last byte:
+    // The short explanation - Since 256 is not divisible by 11, we have an extra 0x0 byte.
     // The longer explanation - When splitting the 256 bits to chunks of 11, we get 23 words and a left over of 3 bits.
-    // This left gets padded with another 8 bits to the create the 24th word.
-    // While converting back to byte array, our new 264 bits array is divisible by 8 but the last byte is just the padding.
+    //   This left gets padded with another 8 bits to the create the 24th word.
+    //   While converting back to byte array, our new 264 bits array is divisible by 8 but the last byte is just the padding.
 
     if bytes.len() != KEY_LEN_BYTES + 1 {
         // TODO can this happen?
