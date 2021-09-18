@@ -13,7 +13,6 @@ const MAX_MULTISIG: u8 = 255;
 
 // TODO implement and use Hashable trait
 // TODO make this more struct/impl oriented than just using functions passing sig/verifier
-// TODO add the other test cases from https://github.com/algorand/go-algorand/blob/master/crypto/multisig_test.go
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MultisigError {
@@ -358,6 +357,8 @@ mod tests {
     use ed25519_dalek::{SecretKey, SECRET_KEY_LENGTH};
     use rand::{thread_rng, RngCore};
 
+    use crate::crypto::batch_verifier::BatchVerError;
+
     #[test]
     fn address_generation() {
         let version = 1;
@@ -535,7 +536,191 @@ mod tests {
         add_sigs(sigs, &mut msig2).unwrap();
         let msig = merge(&msig1, &msig2).unwrap();
         assert_eq!(verify(tx, addr, &msig), Ok(true));
+    }
 
-        return;
+    #[test]
+    fn incorrect_address() {
+        let version = 1;
+        let threshold = 1;
+        let tx = b"test: txid 1000";
+
+        let mut rng = thread_rng();
+        let mut seed = [0; SECRET_KEY_LENGTH];
+
+        rng.fill_bytes(&mut seed);
+        let sk = SecretKey::from_bytes(&seed).unwrap();
+        let pks = vec![(&sk).into()];
+        let kp = Keypair {
+            secret: sk,
+            public: pks[0],
+        };
+
+        let mut addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let msig = sign(tx, addr, version, threshold, &pks, &kp).unwrap();
+        addr[0] = addr[0] + 1;
+        assert_eq!(verify(tx, addr, &msig), Err(MultisigError::InvalidAddress));
+        let mut bv = BatchVerifier::with_capacity(1);
+        assert_eq!(
+            batch_verify(tx, addr, &msig, &mut bv),
+            Err(MultisigError::InvalidAddress)
+        );
+    }
+
+    #[test]
+    fn more_than_max_sigs() {
+        let version = 1;
+        let threshold = 1;
+        let tx = b"text: txid 1000";
+
+        let mut rng = thread_rng();
+        let mut seed = [0; SECRET_KEY_LENGTH];
+        let mut kps = Vec::new();
+        let mut pks = Vec::new();
+
+        for _ in 0..MAX_MULTISIG as usize + 1 {
+            rng.fill_bytes(&mut seed);
+            let secret = SecretKey::from_bytes(&seed).unwrap();
+            let public = (&secret).into();
+            let kp = Keypair { secret, public };
+            kps.push(kp);
+            pks.push(public);
+        }
+
+        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let mut sigs = Vec::new();
+
+        for i in 0..MAX_MULTISIG as usize + 1 {
+            sigs.push(sign(tx, addr, version, threshold, &pks, &kps[i]).unwrap());
+        }
+
+        let msig = assemble(&sigs).unwrap();
+        assert_eq!(
+            verify(tx, addr, &msig),
+            Err(MultisigError::InvalidNumberOfSignatures)
+        );
+        let mut bv = BatchVerifier::with_capacity(1);
+        assert_eq!(
+            batch_verify(tx, addr, &msig, &mut bv),
+            Err(MultisigError::InvalidNumberOfSignatures)
+        );
+    }
+
+    #[test]
+    fn one_sig_is_empty() {
+        let multisig_len = 6;
+        let version = 1;
+        let threshold = multisig_len as u8;
+        let tx = b"text: txid 1000";
+
+        let mut rng = thread_rng();
+        let mut seed = [0; SECRET_KEY_LENGTH];
+        let mut kps = Vec::new();
+        let mut pks = Vec::new();
+
+        for _ in 0..multisig_len {
+            rng.fill_bytes(&mut seed);
+            let secret = SecretKey::from_bytes(&seed).unwrap();
+            let public = (&secret).into();
+            kps.push(Keypair { secret, public });
+            pks.push(public);
+        }
+
+        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let mut sigs = Vec::new();
+
+        for i in 0..multisig_len {
+            sigs.push(sign(tx, addr, version, threshold, &pks, &kps[i]).unwrap());
+        }
+
+        let mut msig = assemble(&sigs).unwrap();
+        msig.subsigs[0].sig = None;
+        assert_eq!(
+            verify(tx, addr, &msig),
+            Err(MultisigError::InvalidNumberOfSignatures)
+        );
+        let mut bv = BatchVerifier::with_capacity(1);
+        assert_eq!(
+            batch_verify(tx, addr, &msig, &mut bv),
+            Err(MultisigError::InvalidNumberOfSignatures)
+        );
+    }
+
+    // in this test we want to test what happen if one of the signatures are not valid.
+    // we create case where are enoguht valid signatures (that pass the thrashold). but since one is false. everything fails.
+    #[test]
+    fn one_sig_is_invalid() {
+        let multisig_len = 6;
+        let version = 1;
+        let threshold = 3;
+        let tx = b"test: txid 1000";
+
+        let mut rng = thread_rng();
+        let mut seed = [0; SECRET_KEY_LENGTH];
+        let mut kps = Vec::new();
+        let mut pks = Vec::new();
+
+        for _ in 0..multisig_len {
+            rng.fill_bytes(&mut seed);
+            let secret = SecretKey::from_bytes(&seed).unwrap();
+            let public = (&secret).into();
+            kps.push(Keypair { secret, public });
+            pks.push(public);
+        }
+
+        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let mut sigs = Vec::new();
+
+        for i in 0..multisig_len {
+            sigs.push(sign(tx, addr, version, threshold, &pks, &kps[i]).unwrap());
+        }
+
+        // break one signature
+        let mut sig_bytes = sigs[1].subsigs[1].sig.unwrap().to_bytes();
+        sig_bytes[5] += 1;
+        sigs[1].subsigs[1].sig = Some(Signature::new(sig_bytes));
+
+        let msig = assemble(&sigs).unwrap();
+        assert_eq!(verify(tx, addr, &msig), Ok(false));
+        let mut bv = BatchVerifier::with_capacity(1);
+        assert_eq!(batch_verify(tx, addr, &msig, &mut bv), Ok(true));
+        assert_eq!(bv.verify(), Err(BatchVerError::VerificationFailed));
+    }
+
+    #[test]
+    fn less_than_threshold() {
+        let version = 1;
+        let threshold = 3;
+        let tx = b"test: txid 1000";
+
+        let mut rng = thread_rng();
+        let mut seed = [0; SECRET_KEY_LENGTH];
+        let mut kps = Vec::new();
+        let mut pks = Vec::new();
+
+        for _ in 0..4 {
+            rng.fill_bytes(&mut seed);
+            let secret = SecretKey::from_bytes(&seed).unwrap();
+            let public = (&secret).into();
+            kps.push(Keypair { secret, public });
+            pks.push(public);
+        }
+
+        // addr  = hash (... |pk0|pk1|pk2|pk3)
+        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let mut sigs = Vec::new();
+        for i in 0..3 {
+            sigs.push(sign(tx, addr, version, threshold, &pks, &kps[i]).unwrap());
+        }
+
+        let mut msig = assemble(&sigs).unwrap();
+        msig.subsigs[1].sig = None;
+        assert_eq!(
+            verify(tx, addr, &msig),
+            Err(MultisigError::InvalidNumberOfSignatures)
+        );
+
+        let mut msig = assemble(&sigs).unwrap();
+        msig.subsigs.pop();
+        assert_eq!(verify(tx, addr, &msig), Err(MultisigError::InvalidAddress));
     }
 }
