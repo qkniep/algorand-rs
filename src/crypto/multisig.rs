@@ -12,7 +12,6 @@ use crate::crypto::batch_verifier::BatchVerifier;
 const MAX_MULTISIG: u8 = 255;
 
 // TODO implement and use Hashable trait
-// TODO make this more struct/impl oriented than just using functions passing sig/verifier
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MultisigError {
@@ -28,6 +27,9 @@ pub enum MultisigError {
     InvalidDuplicates,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct MultisigAddr([u8; 32]);
+
 #[derive(Default, Debug, PartialEq, Eq)]
 struct MultisigSubsig {
     pub key: PublicKey,
@@ -41,313 +43,307 @@ struct MultisigSignature {
     pub subsigs: Vec<MultisigSubsig>,
 }
 
-fn gen_multisig_addr(
-    version: u8,
-    threshold: u8,
-    pks: &Vec<PublicKey>,
-) -> Result<[u8; 32], MultisigError> {
-    if version != 1 {
-        return Err(MultisigError::UnknownVersion(version));
-    }
-
-    if threshold == 0 || pks.len() == 0 || threshold as usize > pks.len() {
-        return Err(MultisigError::InvalidThreshold);
-    }
-
-    let mut buf = b"MultisigAddr".to_vec();
-    buf.push(version);
-    buf.push(threshold);
-
-    for pk in pks {
-        buf.extend(pk.as_bytes());
-    }
-
-    return Ok(Sha512Trunc256::digest(&buf).try_into().unwrap());
-}
-
-// MultisigAddrGenWithSubsigs is similar to MultisigAddrGen
-// except the input is []Subsig rather than []PublicKey
-fn gen_multisig_addr_with_subsigs(
-    version: u8,
-    threshold: u8,
-    subsigs: &Vec<MultisigSubsig>,
-) -> Result<[u8; 32], MultisigError> {
-    let pks = subsigs.iter().map(|s| s.key).collect();
-    return gen_multisig_addr(version, threshold, &pks);
-}
-
-/// Has to be called for each signing party individually.
-fn sign(
-    msg: &[u8],
-    addr: [u8; 32],
-    version: u8,
-    threshold: u8,
-    pks: &Vec<PublicKey>,
-    kp: &Keypair,
-) -> Result<MultisigSignature, MultisigError> {
-    if version != 1 {
-        return Err(MultisigError::UnknownVersion(version));
-    }
-
-    // check the address matches the keys
-    let addr_new = gen_multisig_addr(version, threshold, &pks)?;
-
-    if addr != addr_new {
-        return Err(MultisigError::InvalidAddress);
-    }
-
-    // setup parameters
-    let mut sig = MultisigSignature {
-        version,
-        threshold,
-        subsigs: Vec::with_capacity(pks.len()),
-    };
-
-    // check if own public key is in the pk list
-    if !pks.contains(&kp.public) {
-        return Err(MultisigError::KeyNotExists);
-    }
-
-    // form the multisig
-    for i in 0..pks.len() {
-        sig.subsigs.push(MultisigSubsig {
-            key: pks[i],
-            sig: None,
-        });
-        if kp.public == pks[i] {
-            sig.subsigs[i].sig = Some(kp.sign(&msg));
+impl MultisigAddr {
+    fn from_pks(version: u8, threshold: u8, pks: &Vec<PublicKey>) -> Result<Self, MultisigError> {
+        if version != 1 {
+            return Err(MultisigError::UnknownVersion(version));
         }
+
+        if threshold == 0 || pks.len() == 0 || threshold as usize > pks.len() {
+            return Err(MultisigError::InvalidThreshold);
+        }
+
+        let mut buf = b"MultisigAddr".to_vec();
+        buf.push(version);
+        buf.push(threshold);
+
+        for pk in pks {
+            buf.extend(pk.as_bytes());
+        }
+
+        return Ok(Self(Sha512Trunc256::digest(&buf).try_into().unwrap()));
     }
 
-    return Ok(sig);
+    // MultisigAddrGenWithSubsigs is similar to MultisigAddrGen
+    // except the input is []Subsig rather than []PublicKey
+    fn from_subsigs(
+        version: u8,
+        threshold: u8,
+        subsigs: &Vec<MultisigSubsig>,
+    ) -> Result<Self, MultisigError> {
+        let pks = subsigs.iter().map(|s| s.key).collect();
+        return Self::from_pks(version, threshold, &pks);
+    }
+
+    /// Has to be called for each signing party individually.
+    fn sign(
+        &self,
+        msg: &[u8],
+        version: u8,
+        threshold: u8,
+        pks: &Vec<PublicKey>,
+        kp: &Keypair,
+    ) -> Result<MultisigSignature, MultisigError> {
+        if version != 1 {
+            return Err(MultisigError::UnknownVersion(version));
+        }
+
+        // check the address matches the keys
+        let addr = Self::from_pks(version, threshold, &pks)?;
+
+        if *self != addr {
+            return Err(MultisigError::InvalidAddress);
+        }
+
+        // setup parameters
+        let mut sig = MultisigSignature {
+            version,
+            threshold,
+            subsigs: Vec::with_capacity(pks.len()),
+        };
+
+        // check if own public key is in the pk list
+        if !pks.contains(&kp.public) {
+            return Err(MultisigError::KeyNotExists);
+        }
+
+        // form the multisig
+        for i in 0..pks.len() {
+            sig.subsigs.push(MultisigSubsig {
+                key: pks[i],
+                sig: None,
+            });
+            if kp.public == pks[i] {
+                sig.subsigs[i].sig = Some(kp.sign(&msg));
+            }
+        }
+
+        return Ok(sig);
+    }
 }
 
-/// Combines multiple `MultisigSignature` into one
-fn assemble(unisig: &Vec<MultisigSignature>) -> Result<MultisigSignature, MultisigError> {
-    if unisig.len() < 2 {
-        return Err(MultisigError::InvalidNumberOfSignatures);
-    }
-
-    // check if all unisig match
-    for i in 1..unisig.len() {
-        if unisig[0].threshold != unisig[i].threshold {
-            return Err(MultisigError::ThresholdsDontMatch(
-                unisig[0].threshold,
-                unisig[i].threshold,
-            ));
-        } else if unisig[0].version != unisig[i].version {
-            return Err(MultisigError::VersionsDontMatch(
-                unisig[0].version,
-                unisig[i].version,
-            ));
-        } else if unisig[0].subsigs.len() != unisig[i].subsigs.len() {
+impl MultisigSignature {
+    /// Combines multiple `MultisigSignature` into one
+    fn assemble(unisig: &Vec<Self>) -> Result<Self, MultisigError> {
+        if unisig.len() < 2 {
             return Err(MultisigError::InvalidNumberOfSignatures);
         }
-        for j in 0..unisig[0].subsigs.len() {
-            if unisig[0].subsigs[j].key != unisig[i].subsigs[j].key {
-                return Err(MultisigError::KeysDontMatch);
+
+        // check if all unisig match
+        for i in 1..unisig.len() {
+            if unisig[0].threshold != unisig[i].threshold {
+                return Err(MultisigError::ThresholdsDontMatch(
+                    unisig[0].threshold,
+                    unisig[i].threshold,
+                ));
+            } else if unisig[0].version != unisig[i].version {
+                return Err(MultisigError::VersionsDontMatch(
+                    unisig[0].version,
+                    unisig[i].version,
+                ));
+            } else if unisig[0].subsigs.len() != unisig[i].subsigs.len() {
+                return Err(MultisigError::InvalidNumberOfSignatures);
             }
-        }
-    }
-
-    // make the assembled signature
-    let mut msig = MultisigSignature {
-        version: unisig[0].version,
-        threshold: unisig[0].threshold,
-        subsigs: Vec::with_capacity(unisig[0].subsigs.len()),
-    };
-
-    for i in 0..unisig[0].subsigs.len() {
-        msig.subsigs.push(MultisigSubsig {
-            key: unisig[0].subsigs[i].key,
-            sig: None,
-        });
-    }
-
-    // TODO what happens if unisig contains multiple copies of the same sig?
-    // TODO add this as test case!
-    for i in 0..unisig.len() {
-        for j in 0..unisig[0].subsigs.len() {
-            if let Some(s) = unisig[i].subsigs[j].sig {
-                msig.subsigs[j].sig = Some(s);
-            }
-        }
-    }
-
-    return Ok(msig);
-}
-
-fn verify(msg: &[u8], addr: [u8; 32], sig: &MultisigSignature) -> Result<bool, MultisigError> {
-    let mut batch_verifier = BatchVerifier::new();
-
-    if !batch_verify(msg, addr, sig, &mut batch_verifier)? {
-        return Ok(false);
-    }
-
-    if batch_verifier.num_sigs_enqued() == 0 {
-        return Ok(true);
-    }
-
-    return Ok(batch_verifier.verify().is_ok());
-}
-
-// MultisigBatchVerify verifies an assembled MultisigSig.
-// it is the caller responsibility to call batchVerifier.verify()
-fn batch_verify(
-    msg: &[u8],
-    addr: [u8; 32],
-    sig: &MultisigSignature,
-    batch_verifier: &mut BatchVerifier,
-) -> Result<bool, MultisigError> {
-    // short circuit: if msig doesn't have subsigs or if Subsigs are empty
-    // then terminate (the upper layer should now verify the unisig)
-    if sig.subsigs.len() == 0 || sig.subsigs[0] == MultisigSubsig::default() {
-        return Err(MultisigError::InvalidNumberOfSignatures);
-    }
-
-    // check the address is correct
-    let addrnew = gen_multisig_addr_with_subsigs(sig.version, sig.threshold, &sig.subsigs)?;
-    if addr != addrnew {
-        return Err(MultisigError::InvalidAddress);
-    }
-
-    // check that we don't have too many multisig subsigs
-    if sig.subsigs.len() > MAX_MULTISIG as usize {
-        return Err(MultisigError::InvalidNumberOfSignatures);
-    }
-
-    // check that we don't have too few multisig subsigs
-    if sig.subsigs.len() < sig.threshold as usize {
-        return Err(MultisigError::InvalidNumberOfSignatures);
-    }
-
-    // checks the number of non-blank signatures is no less than threshold
-    let non_empty = sig.subsigs.iter().filter(|s| s.sig.is_some()).count();
-    if non_empty < sig.threshold as usize {
-        return Err(MultisigError::InvalidNumberOfSignatures);
-    }
-
-    // checks individual signature verifies
-    let mut verified = 0;
-    for sub_sig in &sig.subsigs {
-        if let Some(s) = sub_sig.sig {
-            batch_verifier.enque_sig(sub_sig.key, msg, s);
-            verified += 1;
-        }
-    }
-
-    // sanity check. if we get here then every non-blank subsig should have
-    // been verified successfully, and we should have had enough of them
-    if verified < sig.threshold {
-        return Err(MultisigError::InvalidNumberOfSignatures);
-    }
-
-    return Ok(true);
-}
-
-/// Adds unisigs to an existing msig.
-fn add_sigs(
-    unisigs: Vec<MultisigSignature>,
-    msig: &mut MultisigSignature,
-) -> Result<(), MultisigError> {
-    if unisigs.is_empty() {
-        return Err(MultisigError::InvalidNumberOfSignatures);
-    }
-
-    // check if all unisig match
-    // TODO write function for this match check!
-    for unisig in &unisigs {
-        if msig.threshold != unisig.threshold {
-            return Err(MultisigError::ThresholdsDontMatch(
-                msig.threshold,
-                unisig.threshold,
-            ));
-        } else if msig.version != unisig.version {
-            return Err(MultisigError::VersionsDontMatch(
-                msig.version,
-                unisig.version,
-            ));
-        } else if msig.subsigs.len() != unisig.subsigs.len() {
-            return Err(MultisigError::KeysDontMatch);
-        }
-
-        for i in 0..unisigs[0].subsigs.len() {
-            if msig.subsigs[i].key != unisig.subsigs[i].key {
-                return Err(MultisigError::KeysDontMatch);
-            }
-        }
-    }
-
-    // update the msig
-    for i in 0..unisigs.len() {
-        for j in 0..msig.subsigs.len() {
-            if unisigs[i].subsigs[j].sig.is_some() {
-                if msig.subsigs[j].sig.is_none() {
-                    // add the signature
-                    msig.subsigs[j].sig = unisigs[i].subsigs[j].sig;
-                } else if msig.subsigs[j].sig != unisigs[i].subsigs[j].sig {
-                    // invalid duplicates
-                    return Err(MultisigError::InvalidDuplicates);
-                } else {
-                    // valid duplicates
+            for j in 0..unisig[0].subsigs.len() {
+                if unisig[0].subsigs[j].key != unisig[i].subsigs[j].key {
+                    return Err(MultisigError::KeysDontMatch);
                 }
             }
         }
-    }
 
-    return Ok(());
-}
+        // make the assembled signature
+        let mut msig = MultisigSignature {
+            version: unisig[0].version,
+            threshold: unisig[0].threshold,
+            subsigs: Vec::with_capacity(unisig[0].subsigs.len()),
+        };
 
-// MultisigMerge merges two Multisigs msig1 and msig2 into msigt
-fn merge(
-    msig1: &MultisigSignature,
-    msig2: &MultisigSignature,
-) -> Result<MultisigSignature, MultisigError> {
-    // TODO write function for this match check!
-    // check if all parameters match
-    if msig1.threshold != msig2.threshold
-        || msig1.version != msig2.version
-        || msig1.subsigs.len() != msig2.subsigs.len()
-    {
-        return Err(MultisigError::InvalidThreshold);
-    }
-
-    for i in 0..msig1.subsigs.len() {
-        if msig1.subsigs[i].key != msig2.subsigs[i].key {
-            return Err(MultisigError::KeysDontMatch);
+        for i in 0..unisig[0].subsigs.len() {
+            msig.subsigs.push(MultisigSubsig {
+                key: unisig[0].subsigs[i].key,
+                sig: None,
+            });
         }
-    }
-    // update msigt
-    let mut msig = MultisigSignature {
-        version: msig1.version,
-        threshold: msig1.threshold,
-        subsigs: Vec::with_capacity(msig1.subsigs.len()),
-    };
 
-    for i in 0..msig1.subsigs.len() {
-        msig.subsigs.push(MultisigSubsig {
-            key: msig1.subsigs[i].key,
-            sig: None,
-        });
-
-        if msig1.subsigs[i].sig.is_none() {
-            if msig2.subsigs[i].sig.is_some() {
-                // update signature with msig2's signature
-                msig.subsigs[i].sig = msig2.subsigs[i].sig;
+        // TODO what happens if unisig contains multiple copies of the same sig?
+        // TODO add this as test case!
+        for i in 0..unisig.len() {
+            for j in 0..unisig[0].subsigs.len() {
+                if let Some(s) = unisig[i].subsigs[j].sig {
+                    msig.subsigs[j].sig = Some(s);
+                }
             }
-        } else if msig2.subsigs[i].sig.is_none() || // msig2's sig is empty
-			msig2.subsigs[i].sig == msig1.subsigs[i].sig
-        {
-            // valid duplicates
-            // update signature with msig1's signature
-            msig.subsigs[i].sig = msig1.subsigs[i].sig;
-        } else {
-            // invalid duplicates
-            return Err(MultisigError::InvalidDuplicates);
         }
+
+        return Ok(msig);
     }
 
-    return Ok(msig);
+    fn verify(&self, msg: &[u8], addr: &MultisigAddr) -> Result<bool, MultisigError> {
+        let mut batch_verifier = BatchVerifier::new();
+
+        if !self.batch_verify(msg, addr, &mut batch_verifier)? {
+            return Ok(false);
+        }
+
+        if batch_verifier.num_sigs_enqued() == 0 {
+            return Ok(true);
+        }
+
+        return Ok(batch_verifier.verify().is_ok());
+    }
+
+    // MultisigBatchVerify verifies an assembled MultisigSig.
+    // it is the caller responsibility to call batchVerifier.verify()
+    fn batch_verify(
+        &self,
+        msg: &[u8],
+        addr: &MultisigAddr,
+        batch_verifier: &mut BatchVerifier,
+    ) -> Result<bool, MultisigError> {
+        // short circuit: if msig doesn't have subsigs or if Subsigs are empty
+        // then terminate (the upper layer should now verify the unisig)
+        if self.subsigs.len() == 0 || self.subsigs[0] == MultisigSubsig::default() {
+            return Err(MultisigError::InvalidNumberOfSignatures);
+        }
+
+        // check the address is correct
+        let addrnew = MultisigAddr::from_subsigs(self.version, self.threshold, &self.subsigs)?;
+        if *addr != addrnew {
+            return Err(MultisigError::InvalidAddress);
+        }
+
+        // check that we don't have too many multisig subsigs
+        if self.subsigs.len() > MAX_MULTISIG as usize {
+            return Err(MultisigError::InvalidNumberOfSignatures);
+        }
+
+        // check that we don't have too few multisig subsigs
+        if self.subsigs.len() < self.threshold as usize {
+            return Err(MultisigError::InvalidNumberOfSignatures);
+        }
+
+        // checks the number of non-blank signatures is no less than threshold
+        let non_empty = self.subsigs.iter().filter(|s| s.sig.is_some()).count();
+        if non_empty < self.threshold as usize {
+            return Err(MultisigError::InvalidNumberOfSignatures);
+        }
+
+        // checks individual signature verifies
+        let mut verified = 0;
+        for sub_sig in &self.subsigs {
+            if let Some(s) = sub_sig.sig {
+                batch_verifier.enque_sig(sub_sig.key, msg, s);
+                verified += 1;
+            }
+        }
+
+        // sanity check. if we get here then every non-blank subsig should have
+        // been verified successfully, and we should have had enough of them
+        if verified < self.threshold {
+            return Err(MultisigError::InvalidNumberOfSignatures);
+        }
+
+        return Ok(true);
+    }
+
+    /// Adds unisigs to an existing msig.
+    fn add_sigs(&mut self, unisigs: Vec<Self>) -> Result<(), MultisigError> {
+        if unisigs.is_empty() {
+            return Err(MultisigError::InvalidNumberOfSignatures);
+        }
+
+        // check if all unisig match
+        // TODO write function for this match check!
+        for unisig in &unisigs {
+            if self.threshold != unisig.threshold {
+                return Err(MultisigError::ThresholdsDontMatch(
+                    self.threshold,
+                    unisig.threshold,
+                ));
+            } else if self.version != unisig.version {
+                return Err(MultisigError::VersionsDontMatch(
+                    self.version,
+                    unisig.version,
+                ));
+            } else if self.subsigs.len() != unisig.subsigs.len() {
+                return Err(MultisigError::KeysDontMatch);
+            }
+
+            for i in 0..unisigs[0].subsigs.len() {
+                if self.subsigs[i].key != unisig.subsigs[i].key {
+                    return Err(MultisigError::KeysDontMatch);
+                }
+            }
+        }
+
+        // update the msig
+        for i in 0..unisigs.len() {
+            for j in 0..self.subsigs.len() {
+                if unisigs[i].subsigs[j].sig.is_some() {
+                    if self.subsigs[j].sig.is_none() {
+                        // add the signature
+                        self.subsigs[j].sig = unisigs[i].subsigs[j].sig;
+                    } else if self.subsigs[j].sig != unisigs[i].subsigs[j].sig {
+                        // invalid duplicates
+                        return Err(MultisigError::InvalidDuplicates);
+                    } else {
+                        // valid duplicates
+                    }
+                }
+            }
+        }
+
+        return Ok(());
+    }
+
+    // MultisigMerge merges two Multisigs msig1 and msig2 into msigt
+    fn merge(&self, other: &MultisigSignature) -> Result<Self, MultisigError> {
+        // TODO write function for this match check!
+        // check if all parameters match
+        if self.threshold != other.threshold
+            || self.version != other.version
+            || self.subsigs.len() != other.subsigs.len()
+        {
+            return Err(MultisigError::InvalidThreshold);
+        }
+
+        for i in 0..self.subsigs.len() {
+            if self.subsigs[i].key != other.subsigs[i].key {
+                return Err(MultisigError::KeysDontMatch);
+            }
+        }
+        // update msigt
+        let mut msig = MultisigSignature {
+            version: self.version,
+            threshold: self.threshold,
+            subsigs: Vec::with_capacity(self.subsigs.len()),
+        };
+
+        for i in 0..self.subsigs.len() {
+            msig.subsigs.push(MultisigSubsig {
+                key: self.subsigs[i].key,
+                sig: None,
+            });
+
+            if self.subsigs[i].sig.is_none() {
+                if other.subsigs[i].sig.is_some() {
+                    // update signature with msig2's signature
+                    msig.subsigs[i].sig = other.subsigs[i].sig;
+                }
+            } else if other.subsigs[i].sig.is_none() || // msig2's sig is empty
+                other.subsigs[i].sig == self.subsigs[i].sig
+            {
+                // valid duplicates
+                // update signature with msig1's signature
+                msig.subsigs[i].sig = self.subsigs[i].sig;
+            } else {
+                // invalid duplicates
+                return Err(MultisigError::InvalidDuplicates);
+            }
+        }
+
+        return Ok(msig);
+    }
 }
 
 #[cfg(test)]
@@ -379,17 +375,17 @@ mod tests {
 
         // keys < threshold
         // Should detect invalid threshold.
-        let result = gen_multisig_addr(version, threshold, &pks);
+        let result = MultisigAddr::from_pks(version, threshold, &pks);
         assert_eq!(result, Err(MultisigError::InvalidThreshold));
 
         // keys == threshold
         pks.push(kps[2].public);
-        let result = gen_multisig_addr(version, threshold, &pks);
+        let result = MultisigAddr::from_pks(version, threshold, &pks);
         assert_eq!(result.is_ok(), true);
 
         // keys > threshold
         pks.push(kps[3].public);
-        let result = gen_multisig_addr(version, threshold, &pks);
+        let result = MultisigAddr::from_pks(version, threshold, &pks);
         assert_eq!(result.is_ok(), true);
     }
 
@@ -410,9 +406,9 @@ mod tests {
             pks.push(public);
         }
 
-        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let addr = MultisigAddr::from_pks(version, threshold, &pks).unwrap();
         assert_eq!(
-            addr,
+            addr.0,
             [
                 215, 156, 40, 176, 255, 146, 124, 48, 105, 103, 167, 143, 244, 248, 78, 177, 30,
                 135, 54, 239, 14, 170, 78, 81, 138, 24, 124, 68, 224, 121, 67, 203
@@ -446,32 +442,32 @@ mod tests {
         pks.push(kps[1].public);
         pks.push(kps[2].public);
         pks.push(kps[3].public);
-        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let addr = MultisigAddr::from_pks(version, threshold, &pks).unwrap();
 
         // invalid version
-        let result = sign(tx, addr, version + 1, threshold, &pks, &kps[0]);
+        let result = addr.sign(tx, version + 1, threshold, &pks, &kps[0]);
         assert_eq!(result.is_err(), true);
 
         // invalid secret key
-        let result = sign(tx, addr, version, threshold, &pks, &kps[4]);
+        let result = addr.sign(tx, version, threshold, &pks, &kps[4]);
         assert_eq!(result, Err(MultisigError::KeyNotExists));
 
         // single signature (3 required)
-        let sigs = vec![sign(tx, addr, version, threshold, &pks, &kps[3]).unwrap()];
-        let result = assemble(&sigs);
+        let sigs = vec![addr.sign(tx, version, threshold, &pks, &kps[3]).unwrap()];
+        let result = MultisigSignature::assemble(&sigs);
         assert_eq!(result, Err(MultisigError::InvalidNumberOfSignatures));
 
         // assemble 3 signatures
         let mut sigs = Vec::new();
         for i in 0..3 {
-            sigs.push(sign(tx, addr, version, threshold, &pks, &kps[i]).unwrap());
+            sigs.push(addr.sign(tx, version, threshold, &pks, &kps[i]).unwrap());
         }
-        let msig = assemble(&sigs).unwrap();
-        assert_eq!(verify(tx, addr, &msig).unwrap(), true);
+        let msig = MultisigSignature::assemble(&sigs).unwrap();
+        assert_eq!(msig.verify(tx, &addr).unwrap(), true);
 
         // batch verification
         let mut bv = BatchVerifier::with_capacity(1);
-        assert_eq!(batch_verify(tx, addr, &msig, &mut bv), Ok(true));
+        assert_eq!(msig.batch_verify(tx, &addr, &mut bv), Ok(true));
         assert_eq!(bv.verify(), Ok(()));
     }
 
@@ -489,20 +485,20 @@ mod tests {
         let sk = SecretKey::from_bytes(&seed).unwrap();
         pks.push((&sk).into());
 
-        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let addr = MultisigAddr::from_pks(version, threshold, &pks).unwrap();
         let empty_sig = MultisigSignature {
             version: version,
             threshold: threshold,
             subsigs: Vec::new(),
         };
         assert_eq!(
-            verify(tx, addr, &empty_sig),
+            empty_sig.verify(tx, &addr),
             Err(MultisigError::InvalidNumberOfSignatures)
         );
 
         let mut bv = BatchVerifier::with_capacity(1);
         assert_eq!(
-            batch_verify(tx, addr, &empty_sig, &mut bv),
+            empty_sig.batch_verify(tx, &addr, &mut bv),
             Err(MultisigError::InvalidNumberOfSignatures)
         );
     }
@@ -525,7 +521,7 @@ mod tests {
         let mut kps = Vec::with_capacity(5);
         let mut pks = Vec::with_capacity(5);
 
-        for i in 0..5 {
+        for _ in 0..5 {
             rng.fill_bytes(&mut seed);
             let secret = SecretKey::from_bytes(&seed).unwrap();
             let public = (&secret).into();
@@ -534,35 +530,35 @@ mod tests {
         }
 
         // addr = hash (... |pk0|pk1|pk2|pk3|pk4)
-        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let addr = MultisigAddr::from_pks(version, threshold, &pks).unwrap();
 
         // msig1 = {sig0,sig1}
         let mut sigs = Vec::new();
-        sigs.push(sign(tx, addr, version, threshold, &pks, &kps[0]).unwrap());
-        sigs.push(sign(tx, addr, version, threshold, &pks, &kps[1]).unwrap());
-        let mut msig1 = assemble(&sigs).unwrap();
+        sigs.push(addr.sign(tx, version, threshold, &pks, &kps[0]).unwrap());
+        sigs.push(addr.sign(tx, version, threshold, &pks, &kps[1]).unwrap());
+        let mut msig1 = MultisigSignature::assemble(&sigs).unwrap();
         // add sig3 to msig and then verify
-        let sigs = vec![sign(tx, addr, version, threshold, &pks, &kps[2]).unwrap()];
-        add_sigs(sigs, &mut msig1).unwrap();
-        assert_eq!(verify(tx, addr, &msig1), Ok(true));
+        let sigs = vec![addr.sign(tx, version, threshold, &pks, &kps[2]).unwrap()];
+        msig1.add_sigs(sigs).unwrap();
+        assert_eq!(msig1.verify(tx, &addr), Ok(true));
 
         // msig2 = {sig3, sig4}
         let mut sigs = Vec::new();
-        sigs.push(sign(tx, addr, version, threshold, &pks, &kps[3]).unwrap());
-        sigs.push(sign(tx, addr, version, threshold, &pks, &kps[4]).unwrap());
-        let mut msig2 = assemble(&sigs).unwrap();
+        sigs.push(addr.sign(tx, version, threshold, &pks, &kps[3]).unwrap());
+        sigs.push(addr.sign(tx, version, threshold, &pks, &kps[4]).unwrap());
+        let mut msig2 = MultisigSignature::assemble(&sigs).unwrap();
         // merge two msigs and then verify
-        let msig = merge(&msig1, &msig2).unwrap();
-        assert_eq!(verify(tx, addr, &msig), Ok(true));
+        let msig = msig1.merge(&msig2).unwrap();
+        assert_eq!(msig.verify(tx, &addr), Ok(true));
 
         // create a valid duplicate on purpose
         // msig1 = {sig0, sig1, sig2}
         // msig2 = {sig2, sig3, sig4}
         // then verify the merged signature
-        let sigs = vec![sign(tx, addr, version, threshold, &pks, &kps[2]).unwrap()];
-        add_sigs(sigs, &mut msig2).unwrap();
-        let msig = merge(&msig1, &msig2).unwrap();
-        assert_eq!(verify(tx, addr, &msig), Ok(true));
+        let sigs = vec![addr.sign(tx, version, threshold, &pks, &kps[2]).unwrap()];
+        msig2.add_sigs(sigs).unwrap();
+        let msig = msig1.merge(&msig2).unwrap();
+        assert_eq!(msig.verify(tx, &addr), Ok(true));
     }
 
     #[test]
@@ -582,13 +578,13 @@ mod tests {
             public: pks[0],
         };
 
-        let mut addr = gen_multisig_addr(version, threshold, &pks).unwrap();
-        let msig = sign(tx, addr, version, threshold, &pks, &kp).unwrap();
-        addr[0] = addr[0] + 1;
-        assert_eq!(verify(tx, addr, &msig), Err(MultisigError::InvalidAddress));
+        let mut addr = MultisigAddr::from_pks(version, threshold, &pks).unwrap();
+        let msig = addr.sign(tx, version, threshold, &pks, &kp).unwrap();
+        addr.0[0] = addr.0[0] + 1;
+        assert_eq!(msig.verify(tx, &addr), Err(MultisigError::InvalidAddress));
         let mut bv = BatchVerifier::with_capacity(1);
         assert_eq!(
-            batch_verify(tx, addr, &msig, &mut bv),
+            msig.batch_verify(tx, &addr, &mut bv),
             Err(MultisigError::InvalidAddress)
         );
     }
@@ -613,21 +609,21 @@ mod tests {
             pks.push(public);
         }
 
-        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let addr = MultisigAddr::from_pks(version, threshold, &pks).unwrap();
         let mut sigs = Vec::new();
 
         for i in 0..MAX_MULTISIG as usize + 1 {
-            sigs.push(sign(tx, addr, version, threshold, &pks, &kps[i]).unwrap());
+            sigs.push(addr.sign(tx, version, threshold, &pks, &kps[i]).unwrap());
         }
 
-        let msig = assemble(&sigs).unwrap();
+        let msig = MultisigSignature::assemble(&sigs).unwrap();
         assert_eq!(
-            verify(tx, addr, &msig),
+            msig.verify(tx, &addr),
             Err(MultisigError::InvalidNumberOfSignatures)
         );
         let mut bv = BatchVerifier::with_capacity(1);
         assert_eq!(
-            batch_verify(tx, addr, &msig, &mut bv),
+            msig.batch_verify(tx, &addr, &mut bv),
             Err(MultisigError::InvalidNumberOfSignatures)
         );
     }
@@ -652,22 +648,22 @@ mod tests {
             pks.push(public);
         }
 
-        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let addr = MultisigAddr::from_pks(version, threshold, &pks).unwrap();
         let mut sigs = Vec::new();
 
         for i in 0..multisig_len {
-            sigs.push(sign(tx, addr, version, threshold, &pks, &kps[i]).unwrap());
+            sigs.push(addr.sign(tx, version, threshold, &pks, &kps[i]).unwrap());
         }
 
-        let mut msig = assemble(&sigs).unwrap();
+        let mut msig = MultisigSignature::assemble(&sigs).unwrap();
         msig.subsigs[0].sig = None;
         assert_eq!(
-            verify(tx, addr, &msig),
+            msig.verify(tx, &addr),
             Err(MultisigError::InvalidNumberOfSignatures)
         );
         let mut bv = BatchVerifier::with_capacity(1);
         assert_eq!(
-            batch_verify(tx, addr, &msig, &mut bv),
+            msig.batch_verify(tx, &addr, &mut bv),
             Err(MultisigError::InvalidNumberOfSignatures)
         );
     }
@@ -694,11 +690,11 @@ mod tests {
             pks.push(public);
         }
 
-        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let addr = MultisigAddr::from_pks(version, threshold, &pks).unwrap();
         let mut sigs = Vec::new();
 
         for i in 0..multisig_len {
-            sigs.push(sign(tx, addr, version, threshold, &pks, &kps[i]).unwrap());
+            sigs.push(addr.sign(tx, version, threshold, &pks, &kps[i]).unwrap());
         }
 
         // break one signature
@@ -706,10 +702,10 @@ mod tests {
         sig_bytes[5] += 1;
         sigs[1].subsigs[1].sig = Some(Signature::new(sig_bytes));
 
-        let msig = assemble(&sigs).unwrap();
-        assert_eq!(verify(tx, addr, &msig), Ok(false));
+        let msig = MultisigSignature::assemble(&sigs).unwrap();
+        assert_eq!(msig.verify(tx, &addr), Ok(false));
         let mut bv = BatchVerifier::with_capacity(1);
-        assert_eq!(batch_verify(tx, addr, &msig, &mut bv), Ok(true));
+        assert_eq!(msig.batch_verify(tx, &addr, &mut bv), Ok(true));
         assert_eq!(bv.verify(), Err(BatchVerError::VerificationFailed));
     }
 
@@ -733,21 +729,21 @@ mod tests {
         }
 
         // addr  = hash (... |pk0|pk1|pk2|pk3)
-        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        let addr = MultisigAddr::from_pks(version, threshold, &pks).unwrap();
         let mut sigs = Vec::new();
         for i in 0..3 {
-            sigs.push(sign(tx, addr, version, threshold, &pks, &kps[i]).unwrap());
+            sigs.push(addr.sign(tx, version, threshold, &pks, &kps[i]).unwrap());
         }
 
-        let mut msig = assemble(&sigs).unwrap();
+        let mut msig = MultisigSignature::assemble(&sigs).unwrap();
         msig.subsigs[1].sig = None;
         assert_eq!(
-            verify(tx, addr, &msig),
+            msig.verify(tx, &addr),
             Err(MultisigError::InvalidNumberOfSignatures)
         );
 
-        let mut msig = assemble(&sigs).unwrap();
+        let mut msig = MultisigSignature::assemble(&sigs).unwrap();
         msig.subsigs.pop();
-        assert_eq!(verify(tx, addr, &msig), Err(MultisigError::InvalidAddress));
+        assert_eq!(msig.verify(tx, &addr), Err(MultisigError::InvalidAddress));
     }
 }
