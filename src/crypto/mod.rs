@@ -4,4 +4,4 @@
 pub mod batch_verifier;
 pub mod mnemonic;
 pub mod multisig;
-//pub mod onetimesig;
+pub mod onetimesig;

@@ -5,7 +5,10 @@ use std::sync::RwLock;
 
 use ed25519_dalek::{PublicKey, SecretKey, Signature};
 use rand::Rng;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+
+// TODO implement codecs
+// TODO ensure codecs are compatible with go-algorand
 
 /// A One Time Signature (OTS) is a cryptographic signature that is produced
 /// a limited number of times and provides forward integrity.
@@ -16,29 +19,24 @@ use serde::{Serialize, Deserialize};
 /// This prevents the secret-holder from signing a contradictory message in the
 /// future in the event of a secret-key compromise.
 ///
-#[derive(Serialize, Deserialize)]
+//#[derive(Serialize, Deserialize)]
 pub struct OTS {
-	// Unfortunately we forgot to mark this struct as omitempty at
-	// one point, and now it's hard to recover from that if we want
-	// to preserve encodings..
-	_struct struct{} `codec:""`
+    /// Signature of msg under the key pk.
+    pub sig: Signature,
+    pub pk: PublicKey,
 
-	// Sig is a signature of msg under the key PK.
-	pub sig: Signature,
-	pub pk:  PublicKey,
+    // Old-style signature that does not use proper domain separation.
+    // PKSigOld is unused; however, unfortunately we forgot to mark it
+    // `codec:omitempty` and so it appears (with zero value) in certs.
+    // This means we can't delete the field without breaking catchup.
+    _pk_sig_old: Signature,
 
-	// Old-style signature that does not use proper domain separation.
-	// PKSigOld is unused; however, unfortunately we forgot to mark it
-	// `codec:omitempty` and so it appears (with zero value) in certs.
-	// This means we can't delete the field without breaking catchup.
-	_pk_sig_old: Signature,
-
-	// Used to verify a new-style two-level ephemeral signature.
-	// PK1Sig is a signature of OneTimeSignatureSubkeyOffsetID(PK, Batch, Offset) under the key PK2.
-	// PK2Sig is a signature of OneTimeSignatureSubkeyBatchID(PK2, Batch) under the master key (OneTimeSignatureVerifier).
-	pub pk2:     PublicKey,
-	pub pk1_sig: Signature,
-	pub pk2_sig: Signature,
+    // Used to verify a new-style two-level ephemeral signature.
+    // PK1Sig is a signature of OneTimeSignatureSubkeyOffsetID(PK, Batch, Offset) under the key PK2.
+    // PK2Sig is a signature of OneTimeSignatureSubkeyBatchID(PK2, Batch) under the master key (OneTimeSignatureVerifier).
+    pub pk2: PublicKey,
+    pub pk1_sig: Signature,
+    pub pk2_sig: Signature,
 }
 
 /// A OneTimeSignatureIdentifier is an identifier under which a OneTimeSignature is
@@ -46,40 +44,32 @@ pub struct OTS {
 /// structure, which corresponds to two levels of our ephemeral key tree.
 #[derive(Serialize, Deserialize)]
 pub struct OTSIdentifier {
-	/// Most-significant part of the identifier.
-	pub batch: u64,
+    /// Most-significant part of the identifier.
+    pub batch: u64,
 
-	/// Least-significant part of the identifier.
-	/// When moving to a new Batch, the Offset values restart from 0.
-	pub offset: u64,
+    /// Least-significant part of the identifier.
+    /// When moving to a new Batch, the Offset values restart from 0.
+    pub offset: u64,
 }
 
 /// A OneTimeSignatureSubkeyBatchID identifies an ephemeralSubkey of a batch
 /// for the purposes of signing it with the top-level master key.
-#[derive(Serialize, Deserialize)]
+//#[derive(Serialize, Deserialize)]
 pub struct OTSSubkeyBatchID {
-	// Unfortunately we forgot to mark this struct as omitempty at
-	// one point, and now it's hard to recover from that if we want
-	// to preserve encodings..
-	_struct struct{} `codec:""`
-
-	pub sub_key_pk: PublicKey,
-	pub batch:   u64,
+    pub sub_key_pk: PublicKey,
+    pub batch: u64,
 }
 
 /// A OneTimeSignatureSubkeyOffsetID identifies an ephemeralSubkey of a specific
 /// offset within a batch, for the purposes of signing it with the batch subkey.
-#[derive(Serialize, Deserialize)]
+//#[derive(Serialize, Deserialize)]
 pub struct OTSSubkeyOffsetID {
-	// Unfortunately we forgot to mark this struct as omitempty at
-	// one point, and now it's hard to recover from that if we want
-	// to preserve encodings..
-	_struct struct{} `codec:""`
-
-	pub sub_key_pk: PublicKey,
-	pub batch: u64,
-	pub offset: u64,
+    pub sub_key_pk: PublicKey,
+    pub batch: u64,
+    pub offset: u64,
 }
+
+type OTSVerifier = PublicKey;
 
 /// OneTimeSignatureSecrets are used to produced unforgeable signatures over a
 /// message.
@@ -89,70 +79,61 @@ pub struct OTSSubkeyOffsetID {
 /// deleted. Thereafter, an entity can no longer sign different messages with old
 /// OneTimeSignatureIdentifiers, protecting the integrity of the messages signed
 /// under those identifiers.
-#[derive(Serialize, Deserialize)]
+//#[derive(Serialize, Deserialize)]
 pub struct OTSSecrets {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+    persist: OTSSecretsPersistent,
 
-	OneTimeSignatureSecretsPersistent
+    // We keep track of an RNG, used to generate additional randomness.
+    // This is used purely for testing (fuzzing, specifically). Except
+    // for testing, the RNG is SystemRNG.
+    //rng: Rng,
 
-	// We keep track of an RNG, used to generate additional randomness.
-	// This is used purely for testing (fuzzing, specifically). Except
-	// for testing, the RNG is SystemRNG.
-	rng: Rng,
-
-	// We use a read-write lock to guard against concurrent invocations,
-	// such as Sign() concurrently running with DeleteBefore*().
-	lock: RwLock,
+    // We use a read-write lock to guard against concurrent invocations,
+    // such as Sign() concurrently running with DeleteBefore*().
+    lock: RwLock<()>,
 }
 
 /// OTSSecretsPersistent denotes the fields of a OTSSecrets that get stored
 /// to persistent storage (through reflection on exported fields).
-#[derive(Serialize, Deserialize)]
+//#[derive(Serialize, Deserialize)]
 pub struct OTSSecretsPersistent {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+    verifier: OTSVerifier,
 
-	OneTimeSignatureVerifier
+    /// First batch whose subkey appears in Batches.
+    // The odd `codec:` name is for backwards compatibility with previous
+    // stored keys where we failed to give any explicit `codec:` name.
+    first_batch: u64,
+    batches: Vec<EphemeralSubkey>,
 
-	/// First batch whose subkey appears in Batches.
-	// The odd `codec:` name is for backwards compatibility with previous
-	// stored keys where we failed to give any explicit `codec:` name.
-	let first_batch: u64,
-    let batches: Vec<EphemeralSubkey>,
+    /// First offset whose subkey appears in offsets.
+    /// These subkeys correspond to batch first_batch-1.
+    first_offset: u64,
+    offsets: Vec<EphemeralSubkey>,
 
-	/// First offset whose subkey appears in offsets.
-	/// These subkeys correspond to batch first_batch-1.
-    let first_offset: u64,
-    let offsets: Vec<EphemeralSubkey>,
-
-	// When Offsets is non-empty, OffsetsPK2 is the intermediate-level public
-	// key that can be used to verify signatures on the subkeys in Offsets, and
-	// OffsetsPK2Sig is the signature from the master key (OneTimeSignatureVerifier)
-	// on OneTimeSignatureSubkeyBatchID(OffsetsPK2, FirstBatch-1).
-    let offsets_pk2: PublicKey,
-    let offsets_pk2_sig: Signature,
+    // When Offsets is non-empty, OffsetsPK2 is the intermediate-level public
+    // key that can be used to verify signatures on the subkeys in Offsets, and
+    // OffsetsPK2Sig is the signature from the master key (OneTimeSignatureVerifier)
+    // on OneTimeSignatureSubkeyBatchID(OffsetsPK2, FirstBatch-1).
+    offsets_pk2: PublicKey,
+    offsets_pk2_sig: Signature,
 }
 
 /// Produces OneTimeSignatures for messages and is deleted after use.
-#[derive(Serialize, Deserialize)]
+//#[derive(Serialize, Deserialize)]
 struct EphemeralSubkey {
-	// Unfortunately we forgot to mark this struct as omitempty at
-	// one point, and now it's hard to recover from that if we want
-	// to preserve encodings..
-	_struct struct{} `codec:""`
+    pub pk: PublicKey,
+    pub sk: SecretKey,
 
-	pub pk: PublicKey,
-	pub sk: SecretKey,
-
-	/// The signature that authenticates PK.
+    /// The signature that authenticates PK.
     // It is the signature of the PK together with the batch number,
     // using an old style of signatures that we support for backwards
-	// compatibility (thus the odd `codec:` name).
-	pub pk_sig_old: Signature,
+    // compatibility (thus the odd `codec:` name).
+    pub pk_sig_old: Signature,
 
-	/// The signature that authenticates PK, signed using the
-	/// Hashable interface for domain separation (the Hashable object is either
-	/// OTSSubkeyBatchID or OTSSubkeyOffsetID).
-	pub pk_sig_new ed25519Signature,
+    /// The signature that authenticates PK, signed using the
+    /// Hashable interface for domain separation (the Hashable object is either
+    /// OTSSubkeyBatchID or OTSSubkeyOffsetID).
+    pub pk_sig_new: Signature,
 }
 
 #[cfg(test)]
