@@ -393,6 +393,33 @@ mod tests {
         assert_eq!(result.is_ok(), true);
     }
 
+    // tests that generated addresses are compatible with go-algorand
+    #[test]
+    fn address_test_vector() {
+        let version = 1;
+        let threshold = 2;
+
+        let mut kps = Vec::with_capacity(3);
+        let mut pks = Vec::with_capacity(3);
+
+        for i in 0..3 {
+            let seed = [i; SECRET_KEY_LENGTH];
+            let secret = SecretKey::from_bytes(&seed).unwrap();
+            let public = (&secret).into();
+            kps.push(Keypair { secret, public });
+            pks.push(public);
+        }
+
+        let addr = gen_multisig_addr(version, threshold, &pks).unwrap();
+        assert_eq!(
+            addr,
+            [
+                215, 156, 40, 176, 255, 146, 124, 48, 105, 103, 167, 143, 244, 248, 78, 177, 30,
+                135, 54, 239, 14, 170, 78, 81, 138, 24, 124, 68, 224, 121, 67, 203
+            ]
+        );
+    }
+
     // this test generates a set of 4 public keys for a threshold of 3
     // signs with 3 keys to get 3 signatures
     // assembles 3 signatures, verify the msig
