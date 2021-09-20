@@ -3,7 +3,7 @@
 
 /// Domain separation prefix for an object type that might be hashed.
 /// This ensures, for example, the hash of a transaction will never collide with the hash of a vote.
-type HashID = &'static str;
+pub type HashID = &'static str;
 
 // Hash IDs for specific object types, in lexicographic order.
 // Hash IDs must be PREFIX-FREE (i.e. no hash ID is a prefix of another)!

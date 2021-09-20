@@ -2,6 +2,7 @@
 // Distributed under terms of the MIT license.
 
 pub mod batch_verifier;
+pub mod hashable;
 pub mod mnemonic;
 pub mod multisig;
 pub mod onetimesig;

@@ -4,7 +4,6 @@
 use std::sync::RwLock;
 
 use ed25519_dalek::{PublicKey, SecretKey, Signature};
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 // TODO implement codecs
