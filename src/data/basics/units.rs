@@ -34,7 +34,7 @@ impl MicroAlgos {
     // because we want it to appear as an integer, even though
     // we represent it as a single-element struct.
     //msgp:ignore MicroAlgos
-    // TODO is this necessary in Rust implementation
+    // TODO is this necessary in Rust implementation?
     // TODO if yes: implement the codec methods from https://github.com/algorand/go-algorand/blob/master/data/basics/units.go
 }
 
