@@ -5,6 +5,7 @@ edition = "2018"
 
 [dependencies]
 data-encoding = "2"
+dirs = "4"
 ed25519 = "1"
 ed25519-dalek = "1"
 lazy_static = "1"
@@ -14,3 +15,4 @@ rmp = "0.8"
 serde = "1"
 serde_json = "1"
 sha2 = "0.9"
+shellexpand = "2"

@@ -14,6 +14,7 @@ const MAX_MULTISIG: u8 = 255;
 // TODO implement and use Hashable trait
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+// TODO implement std::error::Error trait (using crate thiserror?)
 pub enum MultisigError {
     UnknownVersion(u8),
     InvalidThreshold,

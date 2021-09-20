@@ -1,10 +1,4 @@
+//pub mod config;
 pub mod crypto;
 pub mod data;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub mod protocol;
