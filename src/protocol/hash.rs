@@ -1,4 +1,4 @@
-// Copyright (C) 2021 qkniep <qkniep@qk-huawei>
+// Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
 /// Domain separation prefix for an object type that might be hashed.

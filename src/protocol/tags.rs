@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Quentin M. Kniep <qkniep@qk-huawei>
+// Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
 /// Tag represents a message type identifier.  Messages have a Tag field. Handlers can register to a given Tag.

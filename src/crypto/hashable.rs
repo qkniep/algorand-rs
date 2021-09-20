@@ -25,8 +25,8 @@ pub enum HashError {
     WrongLength(usize),
 }
 
-/// A trait implemented by an object that can be represented with a sequence of bytes to be hashed or signed.
-/// It needs also to provide a type ID to distinguish different types of objects.
+/// A trait implemented by objects that can be turned into a sequence of bytes to be hashed.
+/// It needs also to provide a type ID (HashID) to distinguish different types of objects.
 pub trait Hashable {
     fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>);
 
@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn encode_decode() {
-        let bytes = b"this is a test";
+        let bytes = b"test";
         let hash = hash(bytes);
         let s: &str = &hash.to_string();
         let recovered: CryptoHash = s.try_into().unwrap();
@@ -103,5 +103,14 @@ mod tests {
         assert_eq!(h.is_zero(), false);
     }
 
-    // TODO test trunc_to_u64 for compatibility with go-algorand
+    #[test]
+    fn truncate_u64() {
+        let h = CryptoHash::default();
+        assert_eq!(h.trim_to_u64(), 0);
+
+        // test compatibility with go-algorand
+        let bytes = b"test";
+        let h = hash(bytes);
+        assert_eq!(h.trim_to_u64(), 0x870d5e4358fe373d);
+    }
 }
