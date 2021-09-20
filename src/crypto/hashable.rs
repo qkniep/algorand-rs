@@ -19,9 +19,9 @@ pub struct CryptoHash([u8; HASH_LEN]);
 
 #[derive(Error, Debug)]
 pub enum HashError {
-    #[error("data store disconnected")]
+    #[error("invalid base32 encoding")]
     InvalidBase32(#[from] data_encoding::DecodeError),
-    #[error("the data for key `{0}` is not available")]
+    #[error("wrong length for hash: `{0}`")]
     WrongLength(usize),
 }
 

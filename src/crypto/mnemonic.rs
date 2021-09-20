@@ -44,7 +44,7 @@ impl std::fmt::Display for MnemonicError {
 }
 
 /// Converts a key into a mnemonic word list.
-fn key_to_mnemonic(key: [u8; KEY_LEN_BYTES]) -> Vec<String> {
+pub fn key_to_mnemonic(key: [u8; KEY_LEN_BYTES]) -> Vec<String> {
     let mut mnemonic: Vec<String> = to_base11(&key)
         .iter()
         .map(|i| WORDS[*i as usize].clone())
@@ -56,12 +56,22 @@ fn key_to_mnemonic(key: [u8; KEY_LEN_BYTES]) -> Vec<String> {
     return mnemonic;
 }
 
+/// Converts a mnemonic phrase (whitespace separated string of words) into a key.
+pub fn phrase_to_key(phrase: &str) -> Result<[u8; KEY_LEN_BYTES], MnemonicError> {
+    let words = phrase
+        .split_whitespace()
+        .into_iter()
+        .map(|s| s.to_owned())
+        .collect();
+    return mnemonic_to_key(&words);
+}
+
 /// Converts a mnemonic word list into a key.
 /// Returns an error if the mnemonic:
 ///   - has wrong length, or
 ///   - has an invalid checksum, or
 ///   - contains a word not from the word list
-fn mnemonic_to_key(mnemonic: &Vec<String>) -> Result<[u8; KEY_LEN_BYTES], MnemonicError> {
+pub fn mnemonic_to_key(mnemonic: &Vec<String>) -> Result<[u8; KEY_LEN_BYTES], MnemonicError> {
     if mnemonic.len() != MNEMONIC_LEN_WORDS {
         return Err(MnemonicError::WrongMnemonicLen(mnemonic.len()));
     }

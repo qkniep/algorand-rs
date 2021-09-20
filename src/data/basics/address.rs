@@ -18,7 +18,7 @@ enum AddressError {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct Address([u8; 32]);
+pub struct Address(pub [u8; 32]);
 
 impl Address {
     /// Tries to unmarshal the checksummed address string.
