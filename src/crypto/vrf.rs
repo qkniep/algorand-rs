@@ -1,13 +1,48 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
+//! Implementation of ECVRF-ED25519-SHA512-Elligator2 (IETF Draft 5).
+//! For specification see: https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-05
+
+use std::convert::TryInto;
+
+use curve25519_dalek::{constants, edwards::EdwardsPoint, scalar::Scalar};
+use ed25519_dalek::{ExpandedSecretKey, PublicKey, SecretKey};
+use generic_array::GenericArray;
+use sha2::{Digest, Sha512};
+use thiserror::Error;
 // TODO implement benchmarks
 
+const SUITE_STRING: [u8; 1] = [0x04];
+
+/// Different errors that can be raised when proving/verifying VRFs.
+#[derive(Debug, Error)]
+pub enum VrfError {
+    /// The `hash_to_point()` function could not find a valid point.
+    #[error("Hash to point function could not find a valid point")]
+    HashToPointError,
+
+    /// The proof length is invalid.
+    #[error("The proof length is invalid")]
+    InvalidPiLength,
+
+    /// The proof is invalid.
+    #[error("The proof is invalid")]
+    InvalidProof,
+
+    /// Unknown error.
+    #[error("Unknown error")]
+    Unknown,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VrfPrivKey([u8; 64]);
+pub struct VrfKeypair {
+    private: [u8; 32],
+    public: VrfPublicKey,
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct VrfPubKey([u8; 32]);
+pub struct VrfPublicKey([u8; 32]);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VrfProof([u8; 80]);
@@ -15,21 +50,62 @@ pub struct VrfProof([u8; 80]);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VrfOutput([u8; 64]);
 
-///
-pub fn keypair_from_seed(seed: [u8; 32]) -> (VrfPubKey, VrfPrivKey) {
-    unimplemented!();
-}
+impl VrfKeypair {
+    /// Generates a private/public keypair from a secret seed.
+    pub fn from_seed(seed: [u8; 32]) -> Self {
+        let sk = SecretKey::from_bytes(&seed).unwrap();
+        let pk: PublicKey = (&sk).into();
+        Self {
+            private: seed,
+            public: VrfPublicKey(pk.to_bytes()),
+        }
+    }
 
-impl VrfPrivKey {
-    ///
-    fn prove_bytes(&self, bytes: &[u8]) -> Result<VrfProof, ()> {
-        unimplemented!();
+    /// Generates a proof for a given message using this secret key, as specified in:
+    /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-05 (section 5.1).
+    pub fn prove_bytes(&self, bytes: &[u8]) -> Result<VrfProof, ()> {
+        // Step 1: Derive public key. (not necessary, already available as self.public)
+        // Step 2: H = ECVRF_hash_to_curve(Y, alpha_string)
+        let hash_point = hash_to_curve(&self.public, bytes).unwrap();
+
+        // Step 3: h_string = point_to_string(H)
+        let h_str = hash_point.compress().to_bytes();
+
+        // Step 4: Gamma = x*H
+        let xsk: ExpandedSecretKey = (&SecretKey::from_bytes(&self.private).unwrap()).into();
+        let x = Scalar::from_bits(xsk.to_bytes()[..32].try_into().unwrap());
+        let gamma = x * hash_point;
+
+        // Step 5: k = ECVRF_nonce_generation(SK, h_string)
+        let k = gen_nonce(&self.private, &h_str);
+
+        // Step 6: c = ECVRF_hash_points(H, Gamma, k*B, k*H)
+        let b = constants::ED25519_BASEPOINT_POINT;
+        let c = hash_points(hash_point, gamma, k * b, k * hash_point);
+
+        // Step 7: s = (k + c*x) mod q
+        let s = (k + c * x).reduce();
+
+        // Step 8: pi_string = point_to_string(Gamma) || int_to_string(c, n) || int_to_string(s, qLen)
+        let gamma_str = &gamma.compress().to_bytes()[..];
+        let pi = &[gamma_str, &c.as_bytes()[..16], &s.as_bytes()[..]].concat();
+        let pi_fixed: [u8; 80] = pi.as_slice().try_into().unwrap();
+
+        // Step 9: Output pi_string.
+        let proof = VrfProof(pi_fixed);
+        return Ok(proof);
+    }
+
+    /// Gets a copy of the public key.
+    pub fn public(&self) -> VrfPublicKey {
+        self.public.clone()
     }
 }
 
-impl VrfPubKey {
-    ///
-    fn verify_bytes(&self, pi: &[u8], alpha: &[u8]) -> Result<VrfOutput, ()> {
+impl VrfPublicKey {
+    /// Validates a proof for a given message against this public key, as specified in:
+    /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-05 (section 5.3).
+    fn verify_bytes(&self, proof: VrfProof, bytes: &[u8]) -> Result<VrfOutput, VrfError> {
         unimplemented!();
     }
 }
@@ -40,6 +116,81 @@ impl AsRef<[u8]> for VrfProof {
     }
 }
 
+/// Dumb digest which just truncates everything after 512 bits.
+/// It's meant to be used as a no-op: 512 bits in, same 512 bits out.
+/// Needed only for the dirty hack below.
+#[derive(Default)]
+struct TruncHasher(Vec<u8>);
+
+impl Digest for TruncHasher {
+    type OutputSize = generic_array::typenum::U64;
+
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn update(&mut self, data: impl AsRef<[u8]>) {
+        self.0.extend_from_slice(&data.as_ref());
+    }
+
+    fn finalize(self) -> GenericArray<u8, Self::OutputSize> {
+        *GenericArray::from_slice(&self.0[..=63])
+    }
+
+    fn chain(self, data: impl AsRef<[u8]>) -> Self {
+        unimplemented!()
+    }
+    fn finalize_reset(&mut self) -> GenericArray<u8, Self::OutputSize> {
+        unimplemented!()
+    }
+    fn reset(&mut self) {
+        unimplemented!()
+    }
+    fn output_size() -> usize {
+        unimplemented!()
+    }
+    fn digest(data: &[u8]) -> GenericArray<u8, Self::OutputSize> {
+        unimplemented!()
+    }
+}
+
+/// Cryptographically hash byte string to ed25519 curve point, as specified in:
+/// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-05 (section 5.4.1.2).
+fn hash_to_curve(pk: &VrfPublicKey, bytes: &[u8]) -> Result<EdwardsPoint, VrfError> {
+    let s = [&SUITE_STRING, &[0x01], &pk.0[..], &bytes[..]].concat();
+
+    // Hack to avoid forking curve25519_dalek crate because it implements a newer IETF draft:
+    // Hash in here and tell `hash_from_bytes` function to use TruncHasher.
+    let mut h = Sha512::digest(&s);
+    h[31] &= 0x7F;
+
+    Ok(EdwardsPoint::hash_from_bytes::<TruncHasher>(&h))
+}
+
+/// Deterministically generates nonce, as specified in:
+/// https://datatracker.ietf.org/doc/html/rfc8032 (section 5.1.6, steps 1-2).
+fn gen_nonce(sk: &[u8; 32], data: &[u8]) -> Scalar {
+    let h = Sha512::digest(sk);
+    let trunc_h: [u8; 32] = h[32..].try_into().unwrap();
+    let k_ga = Sha512::digest(&[&trunc_h, data].concat());
+    println!("k: {:x?}", k_ga.as_slice());
+    let k = k_ga.as_slice().try_into().unwrap();
+    return Scalar::from_bytes_mod_order_wide(k);
+}
+
+/// Hash points, as specified in:
+/// https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03 (section 5.4.3).
+fn hash_points(a: EdwardsPoint, b: EdwardsPoint, c: EdwardsPoint, d: EdwardsPoint) -> Scalar {
+    let a_str = &a.compress().to_bytes()[..];
+    let b_str = &b.compress().to_bytes()[..];
+    let c_str = &c.compress().to_bytes()[..];
+    let d_str = &d.compress().to_bytes()[..];
+    let s = [&SUITE_STRING, &[0x02], a_str, b_str, c_str, d_str].concat();
+    let h = Sha512::digest(&s);
+    let trunc_h = h[..32].try_into().unwrap();
+    return Scalar::from_bits(trunc_h);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -48,12 +199,13 @@ mod tests {
 
     use data_encoding::HEXLOWER;
 
-    /// ECVRF-ED25519-SHA512-Elligator2 test vectors from: https://www.ietf.org/id/draft-irtf-cfrg-vrf-03.txt appendix A.4
+    /// ECVRF-ED25519-SHA512-Elligator2 test vectors from: https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-05
     #[test]
     fn vrf_test_vectors() {
         test_vector("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", //sk
             "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", //pk
             "", // alpha
+            "1c5672d919cc0a800970cd7e05cb36ed27ed354c33519948e5a9eaf89aee12b7", // hash
             "b6b4699f87d56126c9117a7da55bd0085246f4c56dbc95d20172612e9d38e8d7ca65e573a126ed88d4e30a46f80a666854d675cf3ba81de0de043c3774f061560f55edc256a787afe701677c0f602900", // pi
             "5b49b554d05c0cd5a5325376b3387de59d924fd1e13ded44648ab33c21349a603f25b84ec5ed887995b33da5e3bfcb87cd2f64521c4c62cf825cffabbe5d31cc",                                 // beta
         );
@@ -61,34 +213,48 @@ mod tests {
         test_vector("4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb", //sk
             "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c", //pk
             "72", // alpha
+            "86725262c971bf064168bca2a87f593d425a49835bd52beb9f52ea59352d80fa", // hash
             "ae5b66bdf04b4c010bfe32b2fc126ead2107b697634f6f7337b9bff8785ee111200095ece87dde4dbe87343f6df3b107d91798c8a7eb1245d3bb9c5aafb093358c13e6ae1111a55717e895fd15f99f07", // pi
             "94f4487e1b2fec954309ef1289ecb2e15043a2461ecc7b2ae7d4470607ef82eb1cfa97d84991fe4a7bfdfd715606bc27e2967a6c557cfb5875879b671740b7d8",                                 // beta
+        );
+
+        test_vector("c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7", //sk
+            "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025", //pk
+            "af82", // alpha
+            "9d8663faeb6ab14a239bfc652648b34f783c2e99f758c0e1b6f4f863f9419b56", // hash
+            "926e895d308f5e328e7aa159c06eddbe56d06846abf5d98c2512235eaa57fdce6187befa109606682503b3a1424f0f729ca0418099fbd86a48093e6a8de26307b8d93e02da927e6dd5b73c8f119aee0f", // pi
+            "121b7f9b9aaaa29099fc04a94ba52784d44eac976dd1a3cca458733be5cd090a7b5fbd148444f17f8daf1fb55cb04b1ae85a626e30a54b4b0f8abf4a43314a58",                                 // beta
         );
     }
 
     /// Helper function for checking a single test vector.
     /// All arguments need to be passed as hex strings.
-    fn test_vector(sk_hex: &str, pk_hex: &str, alpha_hex: &str, pi_hex: &str, beta_hex: &str) {
-        // Our "secret keys" are 64 bytes: the spec's 32-byte "secret keys"
-        // (which we call the "seed") followed by the 32-byte precomputed public key.
-        // So the 32-byte "SK" in the test vectors is not directly decoded into a VrfPrivKey,
-        // it instead has to go through `keypair_from_seed()`.
-        let seed = [0u8; 32];
-
+    fn test_vector(
+        sk_hex: &str,
+        pk_hex: &str,
+        alpha_hex: &str,
+        hash_hex: &str,
+        pi_hex: &str,
+        beta_hex: &str,
+    ) {
         // Decode hex
-        let seed = hex_decode(sk_hex).as_slice().try_into().unwrap();
-        let pk = VrfPubKey(hex_decode(pk_hex).as_slice().try_into().unwrap());
+        let seed: [u8; 32] = hex_decode(sk_hex).as_slice().try_into().unwrap();
+        let pk = VrfPublicKey(hex_decode(pk_hex).as_slice().try_into().unwrap());
         let alpha = &hex_decode(alpha_hex);
+        let hash: [u8; 32] = hex_decode(hash_hex).as_slice().try_into().unwrap();
         let pi = VrfProof(hex_decode(pi_hex).as_slice().try_into().unwrap());
         let beta = VrfOutput(hex_decode(beta_hex).as_slice().try_into().unwrap());
 
-        let (pk_calculated, sk) = keypair_from_seed(seed);
-        assert_eq!(pk_calculated, pk);
+        let kp = VrfKeypair::from_seed(seed);
+        assert_eq!(kp.public(), pk);
 
-        let pi_calculated = sk.prove_bytes(alpha).unwrap();
+        let hash_calculated = hash_to_curve(&kp.public, alpha).unwrap();
+        assert_eq!(hash_calculated.compress().to_bytes(), hash);
+
+        let pi_calculated = kp.prove_bytes(alpha).unwrap();
         assert_eq!(pi_calculated, pi);
 
-        let beta_calculated = pk.verify_bytes(&pi.0[..], alpha).unwrap();
+        let beta_calculated = pk.verify_bytes(pi, alpha).unwrap();
         assert_eq!(beta_calculated, beta);
     }
 

@@ -13,6 +13,10 @@ For now it is basically a Rust clone of [go-algorand](https://github.com/algoran
 cargo build
 ```
 
+## Roadmap
+- [ ] finish porting go-algorand
+- [ ] setup Concourse CI or Drone.io
+
 ## License
 
 Released under the [MIT License](LICENSE).

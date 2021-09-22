@@ -133,7 +133,7 @@ struct AccountData {
     pub rewarded_micro_algos: MicroAlgos,
 
     pub vote_id: crypto::OTSVerifier,
-    pub selection_id: crypto::VrfPubKey,
+    pub selection_id: crypto::VrfPublicKey,
 
     pub vote_first_valid: Round,
     pub vote_last_valid: Round,

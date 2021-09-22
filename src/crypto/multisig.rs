@@ -488,8 +488,8 @@ mod tests {
 
         let addr = MultisigAddr::from_pks(version, threshold, &pks).unwrap();
         let empty_sig = MultisigSignature {
-            version: version,
-            threshold: threshold,
+            version,
+            threshold,
             subsigs: Vec::new(),
         };
         assert_eq!(
