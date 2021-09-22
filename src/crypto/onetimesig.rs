@@ -68,7 +68,7 @@ pub struct OTSSubkeyOffsetID {
     pub offset: u64,
 }
 
-type OTSVerifier = PublicKey;
+pub type OTSVerifier = PublicKey;
 
 /// OneTimeSignatureSecrets are used to produced unforgeable signatures over a
 /// message.

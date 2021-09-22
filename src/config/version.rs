@@ -8,22 +8,22 @@ use std::fmt;
 
 /// Major semantic version number (#.y.z) - changed when first public release (0.y.z -> 1.y.z)
 /// and when backwards compatibility is broken.
-const VERSION_MAJOR: i32 = 2;
+const VERSION_MAJOR: u32 = 0;
 
 /// Minor semantic version number (x.#.z) - changed when backwards-compatible features are introduced.
 /// Not enforced until after initial public release (x > 0).
-const VERSION_MINOR: i32 = 10;
+const VERSION_MINOR: u32 = 1;
 
 /// Holding our full version information.
 struct Version {
     /// Algorand's major version number
-    pub major: i32,
+    pub major: u32,
 
     /// Algorand's minor version number
-    pub minor: i32,
+    pub minor: u32,
 
     /// Algorand's Build Number
-    pub build_number: i32,
+    pub build_number: u32,
 
     /// Suffix for any metadata
     pub suffix: String,
@@ -48,19 +48,16 @@ impl fmt::Display for Version {
 }
 
 impl Version {
-    /// Returns the version number in integer (u64) form.
+    /// Returns the version number as 64-bit integer (u64) of the following form:
+    /// [0---major---15|16---minor---31|32---build---63]
     pub fn as_u64(&self) -> u64 {
         let version = self.major as u64;
         version <<= 16;
         version |= self.minor as u64;
-        version <<= 16;
+        version <<= 32;
         version |= self.build_number as u64;
         return version;
     }
-
-    // func (v Version) GetSuffix() string {
-    // 	return v.Suffix
-    // }
 
     /// returns the commit ID for the build's source.
     pub fn get_commit_hash(&self) -> String {
@@ -68,19 +65,11 @@ impl Version {
     }
 }
 
-/// Assumes val is valid number value string; panics if it's not.
-fn convert_to_int(val: &str) -> i32 {
-    if val == "" {
-        return 0;
-    }
-    return val.parse().unwrap();
-}
-
 // make this mutable? RwLock?
 const CURRENT_VERSION: Version = Version {
     major: VERSION_MAJOR,
     minor: VERSION_MINOR,
-    build_number: convert_to_int(BuildNumber), // set using -ldflags
+    build_number: BuildNumber, // set using -ldflags
     suffix: "".to_owned(),
     commit_hash: CommitHash,
     branch: Branch,
@@ -93,7 +82,7 @@ pub fn get_current_version() -> Version {
     CURRENT_VERSION
 }
 
-// FormatVersionAndLicense prints current version and license information
+/// Prints current version and license information.
 pub fn format_version_and_license() -> String {
     let version = get_current_version();
     format!(

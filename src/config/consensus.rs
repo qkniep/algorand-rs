@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::io;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::time::Duration;
 
@@ -11,31 +12,28 @@ use serde::{Deserialize, Serialize};
 
 use super::protocol;
 use super::Result;
+use crate::data::basics;
 
-/// Specifies settings that might vary based on the
-/// particular version of the consensus protocol.
-#[derive(Clone, Serialize, Deserialize)]
-struct ConsensusParams {
-    // Consensus protocol upgrades. Votes for upgrades are collected for
-    // upgrade_vote_rounds. If the number of positive votes is over
-    // upgrade_threshold, the proposal is accepted.
+/// Specifies settings that might vary based on the particular version of the consensus protocol.
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct ConsensusParams {
+    // Consensus protocol upgrades.
+    // Votes for upgrades are collected for `upgrade_vote_rounds`.
+    // If the number of positive votes is over `upgrade_threshold`, the proposal is accepted.
     //
-    // upgrade_vote_rounds needs to be long enough to collect an
+    // `upgrade_vote_rounds` needs to be long enough to collect an
     // accurate sample of participants, and upgrade_threshold needs
     // to be high enough to ensure that there are sufficient participants
     // after the upgrade.
     //
-    // A consensus protocol upgrade may specify the delay between its
-    // acceptance and its execution.  This gives clients time to notify
-    // users.  This delay is specified by the upgrade proposer and must
-    // be between min_upgrade_wait_rounds and max_upgrade_wait_rounds (inclusive)
-    // in the old protocol's parameters.  Note that these parameters refer
-    // to the representation of the delay in a block rather than the actual
-    // delay: if the specified delay is zero, it is equivalent to
-    // default_upgrade_wait_rounds.
+    // A consensus protocol upgrade may specify the delay between its acceptance and its execution.
+    // This gives clients time to notify users.
+    // This delay is specified by the upgrade proposer and must be between `min_upgrade_wait_rounds`
+    // and `max_upgrade_wait_rounds` (inclusive) in the old protocol's parameters.
+    // Note that these parameters refer to the representation of the delay in a block rather than the actual delay:
+    // If the specified delay is zero, it is equivalent to default_upgrade_wait_rounds.
     //
-    // The maximum length of a consensus version string is
-    // max_version_string_len.
+    // The maximum length of a consensus version string is max_version_string_len.
     pub upgrade_vote_rounds: u64,
     pub upgrade_threshold: u64,
     pub default_upgrade_wait_rounds: u64,
@@ -45,51 +43,46 @@ struct ConsensusParams {
 
     /// Determines the maximum number of bytes that transactions can take up in a block.
     /// Specifically, the sum of the lengths of encodings of each transaction
-    /// in a block must not exceed max_txn_bytes_per_block.
-    pub max_txn_bytes_per_block: i32,
+    /// in a block must not exceed `max_tx_bytes_per_block`.
+    pub max_tx_bytes_per_block: i32,
 
     /// The maximum size of a transaction's Note field.
-    pub max_txn_note_bytes: i32,
+    pub max_tx_note_bytes: i32,
 
     /// How long a transaction can be live for:
-    /// the maximum difference between last_valid and first_valid.
+    /// The maximum difference between `last_valid` and `first_valid`.
     ///
     /// Note that in a protocol upgrade, the ledger must first be upgraded
     /// to hold more past blocks for this value to be raised.
-    pub max_txn_life: u64,
+    pub max_tx_life: u64,
 
-    /// approved_upgrades describes the upgrade proposals that this protocol
-    /// implementation will vote for, along with their delay value
-    /// (in rounds).  A delay value of zero is the same as a delay of
-    /// default_upgrade_wait_rounds.
-    pub approved_upgrades: HashMap<protocol::ConsensusVersion, u64>,
+    /// The upgrade proposals that this protocol implementation will vote for, along with their delay value.
+    /// A delay value of zero is the same as a delay of default_upgrade_wait_rounds.
+    pub approved_upgrades: HashMap<protocol::ConsensusVersion, basics::RoundInterval>,
 
-    /// Indicates support for the genesis_hash fields in transactions (and requires them in blocks).
+    /// Indicates support for the `genesis_hash` fields in transactions (and requires them in blocks).
     pub support_genesis_hash: bool,
 
-    /// Indicates that genesis_hash must be present in every transaction.
+    /// Indicates that `genesis_hash` must be present in every transaction.
     pub require_genesis_hash: bool,
 
     /// Specifies the granularity of top-level ephemeral keys.
-    /// key_dilution is the number of second-level keys in each batch,
-    /// signed by a top-level "batch" key.  The default value can be
-    /// overridden in the account state.
+    /// `key_dilution` is the number of second-level keys in each batch, signed by a top-level "batch" key.
+    /// The default value can be overridden in the account state.
     pub default_key_dilution: u64,
 
     /// Specifies the minimum balance that can appear in an account.
-    /// To spend money below min_balance requires issuing
-    /// an account-closing transaction, which transfers all of the
-    /// money from the account, and deletes the account state.
+    /// To spend money below `min_balance` requires issuing an account-closing transaction,
+    /// which transfers all of the money from the account, and deletes the account state.
     pub min_balance: u64,
 
     /// Specifies the minimum fee allowed on a transaction.
-    /// A minimum fee is necessary to prevent do_s. In some sense this is
-    /// a way of making the spender subsidize the cost of storing this transaction.
-    pub min_txn_fee: u64,
+    /// A minimum fee is necessary to prevent DoS.
+    /// In some sense this is a way of making the spender subsidize the cost of storing this transaction.
+    pub min_tx_fee: u64,
 
-    /// Specifies that the sum of the fees in a
-    /// group must exceed one min_txn_fee per Txn, rather than check that
-    /// each Txn has a min_fee.
+    /// Specifies that the sum of the fees in a group must exceed one `min_tx_fee` per Tx,
+    /// rather than check that each Tx has a fee of at least `min_fee`.
     pub enable_fee_pooling: bool,
 
     /// Specifies that the sum of fees for application calls
@@ -108,9 +101,9 @@ struct ConsensusParams {
     pub rewards_rate_refresh_interval: u64,
 
     // seed-related parameters
-    /// how many blocks back we use seeds from in sortition (delta_s in the spec)
+    /// How many blocks back we use seeds from in sortition (`delta_s` in the spec).
     pub seed_lookback: u64,
-    /// how often an old block hash is mixed into the seed. delta_r in the spec
+    /// How often an old block hash is mixed into the seed (`delta_r` in the spec).
     pub seed_refresh_interval: u64,
 
     /// Ledger retention policy.
@@ -147,13 +140,13 @@ struct ConsensusParams {
     /// Maximum time between timestamps on successive blocks.
     pub max_timestamp_increment: i64,
 
-    /// Support for the efficient encoding in signed_txn_in_block.
-    pub support_signed_txn_in_block: bool,
+    /// Support for the efficient encoding in `signed_tx_in_block`.
+    pub support_signed_tx_in_block: bool,
 
     /// Force the `fee_sink` address to be non-participating in the genesis balances.
     pub force_non_participating_fee_sink: bool,
 
-    /// Support for `apply_data` in `signed_txn_in_block`.
+    /// Support for `apply_data` in `signed_tx_in_block`.
     pub apply_data: bool,
 
     /// Track reward distributions in `apply_data`.
@@ -183,8 +176,8 @@ struct ConsensusParams {
     /// Max length of asset URL.
     pub max_asset_uRLBytes: i32,
 
-    /// Support sequential transaction counter `txn_counter`.
-    pub txn_counter: bool,
+    /// Support sequential transaction counter `tx_counter`.
+    pub tx_counter: bool,
 
     /// Transaction groups.
     pub support_tx_groups: bool,
@@ -219,7 +212,7 @@ struct ConsensusParams {
     /// Max number of application_args for an application_call transaction.
     pub max_app_args: i32,
 
-    /// Max for `sum([len(arg) for arg in txn.application_args])`.
+    /// Max for `sum([len(arg) for arg in tx.application_args])`.
     pub max_app_total_arg_len: i32,
 
     /// Maximum byte length of application approval program or clear state.
@@ -237,19 +230,19 @@ struct ConsensusParams {
 
     /// Maximum number of accounts in the application_call Accounts field.
     /// This determines, in part, the maximum number of balance records accessed by a single transaction.
-    pub max_app_txn_accounts: i32,
+    pub max_app_tx_accounts: i32,
 
     /// Maximum number of app ids in the application_call foreign_apps field.
     /// These are the only applications besides the called application
     /// for which global state may be read in the transaction.
-    pub max_app_txn_foreign_apps: i32,
+    pub max_app_tx_foreign_apps: i32,
 
     /// Maximum number of asset ids in the application_call foreign_assets field.
     /// These are the only assets for which the asset parameters may be read in the transaction.
-    pub max_app_txn_foreign_assets: i32,
+    pub max_app_tx_foreign_assets: i32,
 
     /// Maximum number of "foreign references" (accounts, asa, app) that can be attached to a single app call.
-    pub max_app_total_txn_references: i32,
+    pub max_app_total_tx_references: i32,
 
     /// Maximum cost of application approval program or clear state program.
     pub max_app_program_cost: i32,
@@ -363,8 +356,8 @@ struct ConsensusParams {
 }
 
 /// Enumerates possible ways for the block header to commit to the set of transactions in the block.
-#[derive(Clone, Copy)]
-enum PaysetCommitType {
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub enum PaysetCommitType {
     /// Early protocols used a Merkle tree to commit to the transactions.
     /// This is no longer supported.
     Unsupported,
@@ -376,18 +369,25 @@ enum PaysetCommitType {
     Merkle,
 }
 
+impl Default for PaysetCommitType {
+    fn default() -> Self {
+        PaysetCommitType::Unsupported
+    }
+}
+
 /// Defines a set of supported protocol versions and their
 /// corresponding parameters.
 #[derive(Clone, Serialize, Deserialize)]
-struct ConsensusProtocols(HashMap<protocol::ConsensusVersion, ConsensusParams>);
+pub struct ConsensusProtocols(HashMap<protocol::ConsensusVersion, ConsensusParams>);
 
 lazy_static! {
     static ref CONSENSUS: ConsensusProtocols = {
         let mut cp = ConsensusProtocols::new();
         init_consensus_protocols(&mut cp);
         load_configurable_consensus_protocols(".", &mut cp);
-        for (_, &mut p) in cp.0.iter_mut() {
-            check_set_alloc_bounds(p);
+        for (_, p) in cp.0.iter_mut() {
+            // TODO add again, once implemented
+            //check_set_alloc_bounds(p);
         }
         cp
     };
@@ -419,9 +419,9 @@ var MaxInnerTransactions int
 // protocols, used for decoding purposes.
 var MaxLogicSigMaxSize int
 
-// MaxTxnNoteBytes is the largest supported nodes field array size supported by any
+// MaxTxNoteBytes is the largest supported nodes field array size supported by any
 // of the consensus protocols. used for decoding purposes.
-var MaxTxnNoteBytes int
+var MaxTxNoteBytes int
 
 // MaxTxGroupSize is the largest supported number of transactions per transaction group supported by any
 // of the consensus protocols. used for decoding purposes.
@@ -450,6 +450,7 @@ fn check_set_max(value: i32, cur_max: &mut i32) {
     }
 }
 
+/*
 /// Sets some global variables used during msgpack decoding to enforce memory allocation limits.
 /// The values should be generous to prevent correctness bugs, but not so large that DoS attacks are trivial.
 fn check_set_alloc_bounds(p: ConsensusParams) {
@@ -471,7 +472,7 @@ fn check_set_alloc_bounds(p: ConsensusParams) {
     check_set_max(p.max_app_program_len, &mut max_eval_delta_accounts);
     check_set_max(p.max_app_program_len, &mut max_app_program_len);
     check_set_max(p.logic_sig_max_size as i32, &mut max_logic_sig_max_size);
-    check_set_max(p.max_txn_note_bytes, &max_txn_note_bytes);
+    check_set_max(p.max_tx_note_bytes, &max_tx_note_bytes);
     check_set_max(p.max_tx_group_size, &max_tx_group_size);
     // max_bytes_key_value_len is max of max_app_key_len and max_app_bytes_value_len
     check_set_max(p.max_app_key_len, &max_bytes_key_value_len);
@@ -484,9 +485,10 @@ fn check_set_alloc_bounds(p: ConsensusParams) {
     check_set_max(p.max_app_program_len, &max_log_calls);
     check_set_max(p.max_inner_transactions, &max_inner_transactions);
 }
+*/
 
 /// Saves the configurable protocols file to the provided data directory.
-/// If the params contain zero protocols, the existing consensus.json file will be removed if exists.
+/// If the `params` contain zero protocols, the existing consensus.json file will be deleted.
 pub fn save_configurable_consensus(data_dir: &str, params: ConsensusProtocols) -> Result<()> {
     let consensus_protocol_path =
         Path::new(data_dir).join(super::CONFIGURABLE_CONSENSUS_PROTOCOLS_FILENAME);
@@ -494,14 +496,17 @@ pub fn save_configurable_consensus(data_dir: &str, params: ConsensusProtocols) -
     if params.len() == 0 {
         // We have no consensus params to write.
         // In this case, delete the existing file (if any).
-        let err = std::fs::remove_file(consensusProtocolPath)?;
+        std::fs::remove_file(&consensus_protocol_path)?;
     }
-    let encoded_consensus_params = json.Marshal(params);
-    if err != nil {
-        return err;
-    }
-    err = ioutil.WriteFile(consensusProtocolPath, encodedConsensusParams, 0o644);
-    return err;
+    let f = std::fs::OpenOptions::new()
+        .write(true)
+        .read(false)
+        .create(true)
+        .truncate(true)
+        .mode(0o644)
+        .open(consensus_protocol_path)?;
+    serde_json::to_writer_pretty(f, &params)?;
+    return Ok(());
 }
 
 impl ConsensusProtocols {
@@ -513,26 +518,30 @@ impl ConsensusProtocols {
         self.0.len()
     }
 
-    /// Merges a configurable consensus ontop of the existing consensus protocol and returns
-    /// a new consensus protocol without modifying any of the incoming structures.
+    /// Merges a configurable consensus ontop of the existing consensus protocol.
     pub fn merge(&mut self, configurable_consensus: Self) -> Self {
-        let static_consensus = self.clone();
+        let mut static_consensus = self.clone();
 
         for (version, params) in configurable_consensus.0 {
             if params.approved_upgrades.len() == 0 {
                 // if we were provided with an empty ConsensusParams,
                 // delete the existing reference to this consensus version
-                for (ver, par) in static_consensus.0 {
-                    if ver == version {
-                        static_consensus.0.remove(ver);
-                    } else if par.approved_upgrades.contains_key(version) {
+                for (ver, par) in &self.0 {
+                    if *ver == version {
+                        static_consensus.0.remove(&ver);
+                    } else if par.approved_upgrades.contains_key(&version) {
                         // delete upgrade to deleted version
-                        par.approved_upgrades.remove(version);
+                        static_consensus
+                            .0
+                            .get_mut(ver)
+                            .unwrap()
+                            .approved_upgrades
+                            .remove(&version);
                     }
                 }
             } else {
                 // need to add/update entry
-                static_consensus.0[version] = params;
+                //static_consensus.0[&version] = params;
             }
         }
 
@@ -563,14 +572,15 @@ impl ConsensusProtocols {
 /// Loads the configurable protocols from the data directory.
 pub fn load_configurable_consensus_protocols(
     data_dir: &str,
-    Consensus: &mut ConsensusProtocols,
-) -> io::Result<()> {
-    let new_consensus = preload_configurable_consensus_protocols(data_dir, Consensus)?;
+    consensus: &mut ConsensusProtocols,
+) -> Result<()> {
+    let new_consensus = preload_configurable_consensus_protocols(data_dir, consensus)?;
     if new_consensus.len() > 0 {
-        *Consensus = new_consensus;
+        *consensus = new_consensus;
         // Set allocation limits
-        for (_, p) in Consensus.0 {
-            check_set_alloc_bounds(p);
+        for (_, p) in &consensus.0 {
+            // TODO add again, once implemented
+            //check_set_alloc_bounds(p);
         }
     }
     return Ok(());
@@ -580,28 +590,28 @@ pub fn load_configurable_consensus_protocols(
 /// Finally, it returns it to the caller.
 pub fn preload_configurable_consensus_protocols(
     data_dir: &str,
-    Consensus: &ConsensusProtocols,
+    consensus: &mut ConsensusProtocols,
 ) -> Result<ConsensusProtocols> {
     let consensus_protocol_path =
         Path::new(data_dir).join(super::CONFIGURABLE_CONSENSUS_PROTOCOLS_FILENAME);
 
     match std::fs::File::open(consensus_protocol_path) {
         Err(e) => match e.kind() {
-            io::ErrorKind::NotFound => Ok(Consensus.clone()),
+            io::ErrorKind::NotFound => Ok(consensus.clone()),
             _ => Err(e.into()),
         },
         Ok(file) => {
             let configurable_consensus = serde_json::from_reader(file)?;
-            return Ok(Consensus.merge(configurable_consensus));
+            return Ok(consensus.merge(configurable_consensus));
         }
     }
 }
 
-fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
+fn init_consensus_protocols(consensus: &mut ConsensusProtocols) {
     // WARNING: copying a ConsensusParams by value into a new variable does not copy the ApprovedUpgrades map.
     // Make sure that each new ConsensusParams structure gets a fresh ApprovedUpgrades map.
 
-    /// Base consensus protocol version, v7.
+    // Base consensus protocol version, v7.
     let mut v7 = ConsensusParams {
         upgrade_vote_rounds: 10_000,
         upgrade_threshold: 9000,
@@ -609,10 +619,10 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
         max_version_string_len: 64,
 
         min_balance: 10_000,
-        min_txn_fee: 1000,
-        max_txn_life: 1000,
-        max_txn_note_bytes: 1024,
-        max_txn_bytes_per_block: 1_000_000,
+        min_tx_fee: 1000,
+        max_tx_life: 1000,
+        max_tx_note_bytes: 1024,
+        max_tx_bytes_per_block: 1_000_000,
         default_key_dilution: 10_000,
 
         max_timestamp_increment: 25,
@@ -647,13 +657,14 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
         max_bal_lookback: 320,
 
         max_tx_group_size: 1,
+
+        ..Default::default()
     };
 
     v7.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V7] = v7;
 
     // v8 uses parameters and a seed derivation policy (the "twin seeds") from Georgios' new analysis
-    let mut v8 = v7;
+    let mut v8 = v7.clone();
 
     v8.seed_refresh_interval = 80;
     v8.num_proposers = 9;
@@ -671,22 +682,22 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
     v8.down_committee_threshold = 3838;
 
     v8.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V8] = v8;
 
     // v7 can be upgraded to v8.
-    v7.approved_upgrades[protocol::CONSENSUS_V8] = 0;
+    v7.approved_upgrades
+        .insert(protocol::ConsensusVersion::V8, 0);
 
     // v9 increases the minimum balance to 100,000 micro_algos.
-    let mut v9 = v8;
+    let mut v9 = v8.clone();
     v9.min_balance = 100_000;
     v9.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V9] = v9;
 
     // v8 can be upgraded to v9.
-    v8.approved_upgrades[protocol::CONSENSUS_V9] = 0;
+    v8.approved_upgrades
+        .insert(protocol::ConsensusVersion::V9, 0);
 
     // v10 introduces fast partition recovery (and also raises num_proposers).
-    let mut v10 = v9;
+    let mut v10 = v9.clone();
     v10.fast_partition_recovery = true;
     v10.num_proposers = 20;
     v10.late_committee_size = 500;
@@ -696,82 +707,82 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
     v10.down_committee_size = 6000;
     v10.down_committee_threshold = 4560;
     v10.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V10] = v10;
 
     // v9 can be upgraded to v10.
-    v9.approved_upgrades[protocol::CONSENSUS_V10] = 0;
+    v9.approved_upgrades
+        .insert(protocol::ConsensusVersion::V10, 0);
 
-    // v11 introduces signed_txn_in_block.
-    let mut v11 = v10;
-    v11.support_signed_txn_in_block = true;
-    v11.payset_commit = payset_commit_flat;
+    // v11 introduces signed_tx_in_block.
+    let mut v11 = v10.clone();
+    v11.support_signed_tx_in_block = true;
+    v11.payset_commit = PaysetCommitType::Flat;
     v11.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V11] = v11;
 
     // v10 can be upgraded to v11.
-    v10.approved_upgrades[protocol::CONSENSUS_V11] = 0;
+    v10.approved_upgrades
+        .insert(protocol::ConsensusVersion::V11, 0);
 
     // v12 increases the maximum length of a version string.
-    let mut v12 = v11;
+    let mut v12 = v11.clone();
     v12.max_version_string_len = 128;
     v12.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V12] = v12;
 
     // v11 can be upgraded to v12.
-    v11.approved_upgrades[protocol::CONSENSUS_V12] = 0;
+    v11.approved_upgrades
+        .insert(protocol::ConsensusVersion::V12, 0);
 
     // v13 makes the consensus version a meaningful string.
-    let mut v13 = v12;
+    let mut v13 = v12.clone();
     v13.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V13] = v13;
 
     // v12 can be upgraded to v13.
-    v12.approved_upgrades[protocol::CONSENSUS_V13] = 0;
+    v12.approved_upgrades
+        .insert(protocol::ConsensusVersion::V13, 0);
 
     // v14 introduces tracking of closing amounts in apply_data, and enables
     // genesis_hash in transactions.
-    let mut v14 = v13;
+    let mut v14 = v13.clone();
     v14.apply_data = true;
     v14.support_genesis_hash = true;
     v14.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V14] = v14;
 
     // v13 can be upgraded to v14.
-    v13.approved_upgrades[protocol::CONSENSUS_V14] = 0;
+    v13.approved_upgrades
+        .insert(protocol::ConsensusVersion::V14, 0);
 
     // v15 introduces tracking of reward distributions in apply_data.
-    let mut v15 = v14;
+    let mut v15 = v14.clone();
     v15.rewards_in_apply_data = true;
     v15.force_non_participating_fee_sink = true;
     v15.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V15] = v15;
 
     // v14 can be upgraded to v15.
-    v14.approved_upgrades[protocol::CONSENSUS_V15] = 0;
+    v14.approved_upgrades
+        .insert(protocol::ConsensusVersion::V15, 0);
 
     // v16 fixes domain separation in credentials.
-    let mut v16 = v15;
+    let mut v16 = v15.clone();
     v16.credential_domain_separation_enabled = true;
     v16.require_genesis_hash = true;
     v16.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V16] = v16;
 
     // v15 can be upgraded to v16.
-    v15.approved_upgrades[protocol::CONSENSUS_V16] = 0;
+    v15.approved_upgrades
+        .insert(protocol::ConsensusVersion::V16, 0);
 
     // consensus_v17 points to 'final' spec commit
-    let mut v17 = v16;
+    let mut v17 = v16.clone();
     v17.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V17] = v17;
 
     // v16 can be upgraded to v17.
-    v16.approved_upgrades[protocol::CONSENSUS_V17] = 0;
+    v16.approved_upgrades
+        .insert(protocol::ConsensusVersion::V17, 0);
 
     // consensus_v18 points to reward calculation spec commit
-    let mut v18 = v17;
+    let mut v18 = v17.clone();
     v18.pending_residue_rewards = true;
     v18.approved_upgrades = HashMap::new();
-    v18.txn_counter = true;
+    v18.tx_counter = true;
     v18.Asset = true;
     v18.logic_sig_version = 1;
     v18.logic_sig_max_size = 1000;
@@ -784,21 +795,20 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
     v18.max_asset_name_bytes = 32;
     v18.max_asset_unit_name_bytes = 8;
     v18.max_asset_uRLBytes = 32;
-    Consensus.0[protocol::CONSENSUS_V18] = v18;
 
     // consensus_v19 is the official spec commit (teal, assets, group tx)
-    let mut v19 = v18;
+    let mut v19 = v18.clone();
     v19.approved_upgrades = HashMap::new();
 
-    Consensus.0[protocol::CONSENSUS_V19] = v19;
-
     // v18 can be upgraded to v19.
-    v18.approved_upgrades[protocol::CONSENSUS_V19] = 0;
+    v18.approved_upgrades
+        .insert(protocol::ConsensusVersion::V19, 0);
     // v17 can be upgraded to v19.
-    v17.approved_upgrades[protocol::CONSENSUS_V19] = 0;
+    v17.approved_upgrades
+        .insert(protocol::ConsensusVersion::V19, 0);
 
     // v20 points to adding the precision to the assets.
-    let mut v20 = v19;
+    let mut v20 = v19.clone();
     v20.approved_upgrades = HashMap::new();
     v20.max_asset_decimals = 19;
     // we want to adjust the upgrade time to be roughly one week.
@@ -807,39 +817,39 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
     // for the sake of future manual calculations, we'll round that down
     // a bit :
     v20.default_upgrade_wait_rounds = 140_000;
-    Consensus.0[protocol::CONSENSUS_V20] = v20;
 
     // v19 can be upgraded to v20.
-    v19.approved_upgrades[protocol::CONSENSUS_V20] = 0;
+    v19.approved_upgrades
+        .insert(protocol::ConsensusVersion::V20, 0);
 
     // v21 fixes a bug in Credential.lowest_output that would cause larger accounts to be selected to propose
     // disproportionately more often than small accounts
-    let mut v21 = v20;
+    let mut v21 = v20.clone();
     v21.approved_upgrades = HashMap::new();
-    Consensus.0[protocol::CONSENSUS_V21] = v21;
     // v20 can be upgraded to v21.
-    v20.approved_upgrades[protocol::CONSENSUS_V21] = 0;
+    v20.approved_upgrades
+        .insert(protocol::ConsensusVersion::V21, 0);
 
     // v22 is an upgrade which allows tuning the number of rounds to wait to execute upgrades.
-    let mut v22 = v21;
+    let mut v22 = v21.clone();
     v22.approved_upgrades = HashMap::new();
     v22.min_upgrade_wait_rounds = 10_000;
     v22.max_upgrade_wait_rounds = 150_000;
-    Consensus.0[protocol::CONSENSUS_V22] = v22;
 
     // v23 is an upgrade which fixes the behavior of leases so that
     // it conforms with the intended spec.
-    let mut v23 = v22;
+    let mut v23 = v22.clone();
     v23.approved_upgrades = HashMap::new();
     v23.fix_transaction_leases = true;
-    Consensus.0[protocol::CONSENSUS_V23] = v23;
     // v22 can be upgraded to v23.
-    v22.approved_upgrades[protocol::CONSENSUS_V23] = 10_000;
+    v22.approved_upgrades
+        .insert(protocol::ConsensusVersion::V23, 10_000);
     // v21 can be upgraded to v23.
-    v21.approved_upgrades[protocol::CONSENSUS_V23] = 0;
+    v21.approved_upgrades
+        .insert(protocol::ConsensusVersion::V23, 0);
 
     // v24 is the stateful teal and rekeying upgrade
-    let mut v24 = v23;
+    let mut v24 = v23.clone();
     v24.approved_upgrades = HashMap::new();
     v24.logic_sig_version = 2;
 
@@ -864,18 +874,18 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
     v24.app_flat_params_min_balance = 100_000;
     v24.app_flat_opt_in_min_balance = 100_000;
 
-    // Can look up Sender + 4 other balance records per Application txn
-    v24.max_app_txn_accounts = 4;
+    // Can look up Sender + 4 other balance records per Application Tx
+    v24.max_app_tx_accounts = 4;
 
     // Can look up 2 other app creator balance records to see global state
-    v24.max_app_txn_foreign_apps = 2;
+    v24.max_app_tx_foreign_apps = 2;
 
     // Can look up 2 assets to see asset parameters
-    v24.max_app_txn_foreign_assets = 2;
+    v24.max_app_tx_foreign_assets = 2;
 
     // Intended to have no effect in v24 (it's set to accounts + asas + apps).
     // In later vers, it allows increasing the individual limits while maintaining same max references.
-    v24.max_app_total_txn_references = 8;
+    v24.max_app_total_tx_references = 8;
 
     // 64 byte keys @ ~333 micro_algos/byte + delta
     v24.schema_min_balance_per_entry = 25_000;
@@ -900,55 +910,53 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
 
     // Maximum number of apps a single account can opt into
     v24.max_apps_opted_in = 10;
-    Consensus.0[protocol::CONSENSUS_V24] = v24;
 
     // v23 can be upgraded to v24, with an update delay of 7 days (see calculation above)
-    v23.approved_upgrades[protocol::CONSENSUS_V24] = 140_000;
+    v23.approved_upgrades
+        .insert(protocol::ConsensusVersion::V24, 140_000);
 
     // v25 enables asset_close_amount in the apply_data
-    let mut v25 = v24;
+    let mut v25 = v24.clone();
     v25.approved_upgrades = HashMap::new();
 
     // Enable asset_close_amount field
     v25.enable_asset_close_amount = true;
-    Consensus.0[protocol::CONSENSUS_V25] = v25;
 
     // v26 adds support for teal3
-    let mut v26 = v25;
+    let mut v26 = v25.clone();
     v26.approved_upgrades = HashMap::new();
 
     // Enable the initial_rewards_rate_calculation fix
     v26.initial_rewards_rate_calculation = true;
 
     // Enable transaction Merkle tree.
-    v26.payset_commit = payset_commit_merkle;
+    v26.payset_commit = PaysetCommitType::Merkle;
 
     // Enable teal3
     v26.logic_sig_version = 3;
 
-    Consensus.0[protocol::CONSENSUS_V26] = v26;
-
     // v25 or v24 can be upgraded to v26, with an update delay of 7 days ( see calculation above )
-    v25.approved_upgrades[protocol::CONSENSUS_V26] = 140_000;
-    v24.approved_upgrades[protocol::CONSENSUS_V26] = 140_000;
+    v25.approved_upgrades
+        .insert(protocol::ConsensusVersion::V26, 140_000);
+    v24.approved_upgrades
+        .insert(protocol::ConsensusVersion::V26, 140_000);
 
     // v27 updates apply_delta.eval_delta.local_deltas format
-    let mut v27 = v26;
+    let mut v27 = v26.clone();
     v27.approved_upgrades = HashMap::new();
 
     // Enable the apply_delta.eval_delta.local_deltas fix
     v27.no_empty_local_deltas = true;
 
-    Consensus.0[protocol::CONSENSUS_V27] = v27;
-
     // v26 can be upgraded to v27, with an update delay of 3 days
     // 60279 = (3 * 24 * 60 * 60 / 4.3)
     // for the sake of future manual calculations, we'll round that down
     // a bit :
-    v26.approved_upgrades[protocol::CONSENSUS_V27] = 60_000;
+    v26.approved_upgrades
+        .insert(protocol::ConsensusVersion::V27, 60_000);
 
     // v28 introduces new TEAL features, larger program size, fee pooling and longer asset max URL
-    let mut v28 = v27;
+    let mut v28 = v27.clone();
     v28.approved_upgrades = HashMap::new();
 
     // Enable TEAL 4 / AVM 0.9
@@ -962,10 +970,10 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
     v28.max_app_bytes_value_len = 128;
 
     // Individual limits raised
-    v28.max_app_txn_foreign_apps = 8;
-    v28.max_app_txn_foreign_assets = 8;
+    v28.max_app_tx_foreign_apps = 8;
+    v28.max_app_tx_foreign_assets = 8;
 
-    // max_app_txn_accounts has not been raised yet.  It is already
+    // max_app_tx_accounts has not been raised yet.  It is already
     // higher (4) and there is a multiplicative effect in
     // "reachability" between accounts and creatables, so we
     // retain 4 x 4 as worst case.
@@ -973,26 +981,24 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
     v28.enable_fee_pooling = true;
     v28.enable_keyreg_coherency_check = true;
 
-    Consensus.0[protocol::CONSENSUS_V28] = v28;
-
     // v27 can be upgraded to v28, with an update delay of 7 days ( see calculation above )
-    v27.approved_upgrades[protocol::CONSENSUS_V28] = 140_000;
+    v27.approved_upgrades
+        .insert(protocol::ConsensusVersion::V28, 140_000);
 
     // v29 fixes application update by using extra_program_pages in size calculations
-    let mut v29 = v28;
+    let mut v29 = v28.clone();
     v29.approved_upgrades = HashMap::new();
 
     // Enable extra_program_pages for application update
     v29.enable_extra_pages_on_app_update = true;
 
-    Consensus.0[protocol::CONSENSUS_V29] = v29;
-
     // v28 can be upgraded to v29, with an update delay of 3 days ( see calculation above )
-    v28.approved_upgrades[protocol::CONSENSUS_V29] = 60_000;
+    v28.approved_upgrades
+        .insert(protocol::ConsensusVersion::V29, 60_000);
 
     // v30 introduces AVM 1.0 and TEAL 5, increases the app opt in limit to 50,
     // and allows costs to be pooled in grouped stateful transactions.
-    let mut v30 = v29;
+    let mut v30 = v29.clone();
     v30.approved_upgrades = HashMap::new();
 
     // Enable TEAL 5 / AVM 1.0
@@ -1010,14 +1016,13 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
     // Allow 50 app opt ins
     v30.max_apps_opted_in = 50;
 
-    Consensus.0[protocol::CONSENSUS_V30] = v30;
-
     // v29 can be upgraded to v30, with an update delay of 7 days ( see calculation above )
-    v29.approved_upgrades[protocol::CONSENSUS_V30] = 140_000;
+    v29.approved_upgrades
+        .insert(protocol::ConsensusVersion::V30, 140_000);
 
     // consensus_future is used to test features that are implemented
     // but not yet released in a production protocol version.
-    let mut v_future = v30;
+    let mut v_future = v30.clone();
     v_future.approved_upgrades = HashMap::new();
 
     // filter_timeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -1027,16 +1032,46 @@ fn init_consensus_protocols(Consensus: &mut ConsensusProtocols) {
     v_future.compact_cert_rounds = 128;
     v_future.compact_cert_top_voters = 1024 * 1024;
     v_future.compact_cert_voters_lookback = 16;
-    v_future.compact_cert_weight_threshold = (1 << 32) * 30 / 100;
+    // TODO does this make sense?
+    v_future.compact_cert_weight_threshold = ((1u64 << 32) * 30 / 100) as u32;
     v_future.compact_cert_sec_kQ = 128;
 
-    Consensus.0[protocol::CONSENSUS_FUTURE] = v_future;
+    consensus.0.insert(protocol::ConsensusVersion::V7, v7);
+    consensus.0.insert(protocol::ConsensusVersion::V8, v8);
+    consensus.0.insert(protocol::ConsensusVersion::V9, v9);
+    consensus.0.insert(protocol::ConsensusVersion::V10, v10);
+    consensus.0.insert(protocol::ConsensusVersion::V11, v11);
+    consensus.0.insert(protocol::ConsensusVersion::V12, v12);
+    consensus.0.insert(protocol::ConsensusVersion::V13, v13);
+    consensus.0.insert(protocol::ConsensusVersion::V14, v14);
+    consensus.0.insert(protocol::ConsensusVersion::V15, v15);
+    consensus.0.insert(protocol::ConsensusVersion::V16, v16);
+    consensus.0.insert(protocol::ConsensusVersion::V17, v17);
+    consensus.0.insert(protocol::ConsensusVersion::V18, v18);
+    consensus.0.insert(protocol::ConsensusVersion::V19, v19);
+    consensus.0.insert(protocol::ConsensusVersion::V20, v20);
+    consensus.0.insert(protocol::ConsensusVersion::V21, v21);
+    consensus.0.insert(protocol::ConsensusVersion::V22, v22);
+    consensus.0.insert(protocol::ConsensusVersion::V23, v23);
+    consensus.0.insert(protocol::ConsensusVersion::V24, v24);
+    consensus.0.insert(protocol::ConsensusVersion::V25, v25);
+    consensus.0.insert(protocol::ConsensusVersion::V26, v26);
+    consensus.0.insert(protocol::ConsensusVersion::V27, v27);
+    consensus.0.insert(protocol::ConsensusVersion::V28, v28);
+    consensus.0.insert(protocol::ConsensusVersion::V29, v29);
+    consensus.0.insert(protocol::ConsensusVersion::V30, v30);
+    consensus
+        .0
+        .insert(protocol::ConsensusVersion::Future, v_future);
 }
 
-// Global defines global Algorand protocol parameters which should not be overridden.
+/// Defines global Algorand protocol parameters which should not be overridden.
 pub struct Global {
-    pub small_lambda: std::time::Duration, // min amount of time to wait for leader's credential (i.e., time to propagate one credential)
-    pub big_lambda: std::time::Duration, // max amount of time to wait for leader's proposal (i.e., time to propagate one block)
+    /// Min amount of time to wait for leader's credential (i.e., time to propagate one credential).
+    pub small_lambda: std::time::Duration,
+
+    /// Max amount of time to wait for leader's proposal (i.e., time to propagate one block).
+    pub big_lambda: std::time::Duration,
 }
 
 // Protocol holds the global configuration settings for the agreement protocol,
@@ -1057,30 +1092,31 @@ static protocol: Global = Global {
     }
 }*/
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn TestConsensusParams() {
-        for (proto, params) in Consensus {
-            // Our implementation of Payset.Commit() assumes that
-            // SupportSignedTxnInBlock implies not PaysetCommitUnsupported.
-            if params.SupportSignedTxnInBlock {
+    fn check_params() {
+        for (proto, params) in CONSENSUS {
+            // Our implementation of `Payset::commit()` assumes that
+            // `support_signed_tx_in_block` implies not `PaysetCommitType::Unsupported`.
+            if params.support_signed_tx_in_block {
                 assert_ne!(
                     params.PaysetCommit,
                     PaysetCommitType::Unsupported,
-                    "Protocol {}: SupportSignedTxnInBlock with PaysetCommitUnsupported",
+                    "Protocol {}: support_signed_tx_in_block with PaysetCommitType::Unsupported",
                     proto
                 );
             }
 
-            // ApplyData requires not PaysetCommitUnsupported.
-            if params.ApplyData && params.PaysetCommit == PaysetCommitType::Unsupported {
+            // ApplyData requires not `PaysetCommitType::Unsupported`.
+            if params.apply_data {
                 assert_ne!(
                     params.PaysetCommit,
                     PaysetCommitType::Unsupported,
-                    "Protocol {}: ApplyData with PaysetCommitUnsupported",
+                    "Protocol {}: apply_data with PaysetCommitType::Unsupported",
                     proto
                 );
             }
@@ -1089,8 +1125,8 @@ mod tests {
 
     /// Ensures that the upgrade window is a non-zero value, and confirm to be within the valid range.
     #[test]
-    fn TestConsensusUpgradeWindow() {
-        for (proto, params) in Consensus {
+    fn upgrade_window() {
+        for (proto, params) in CONSENSUS {
             assert!(
                 params.max_upgrade_wait_rounds >= params.min_upgrade_wait_rounds,
                 "Version {}",
@@ -1109,3 +1145,4 @@ mod tests {
         }
     }
 }
+*/

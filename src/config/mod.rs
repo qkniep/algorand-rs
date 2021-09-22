@@ -1,6 +1,13 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
+//mod buildvars;
+mod consensus;
+mod default;
+mod keyfile;
+//mod migrate;
+//mod version;
+
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::unix::fs::OpenOptionsExt;
@@ -8,26 +15,20 @@ use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use std::{fs, io};
 
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::protocol;
+pub use consensus::*;
 
-mod buildvars;
-mod consensus;
-mod default;
-//mod migrate;
-mod version;
-
-use default::DEFAULT_LOCAL;
-
-/// Identifies the 'development network' use for development and not generally accessible publicly.
+/// Identifies the 'development network' for development and not generally accessible publicly.
 pub const DEVNET: protocol::NetworkID = "devnet";
 
-/// Identifies the 'beta network' use for early releases of feature to the public prior to releasing these to mainnet/testnet.
+/// Identifies the 'beta network' for early releases of feature to the public prior to releasing these to mainnet/testnet.
 pub const BETANET: protocol::NetworkID = "betanet";
 
-/// Identifies the 'development network for tests' use for running tests against development and not generally accessible publicly.
+/// Identifies the 'development network for tests' for running tests against development and not generally accessible publicly.
 pub const DEVTESTNET: protocol::NetworkID = "devtestnet";
 
 /// Identifies the publicly-available test network.
@@ -39,6 +40,7 @@ pub const MAINNET: protocol::NetworkID = "mainnet";
 /// The name of the file containing the genesis block.
 pub const GENESIS_JSON_FILE: &'static str = "genesis.json";
 
+// Bit flags for enabling different DNSSEC checks.
 const DNSSEC_SRV: u32 = 1;
 const DNSSEC_RELAY_ADDR: u32 = 2;
 const DNSSEC_TELEMETRY_ADDR: u32 = 4;
@@ -46,7 +48,7 @@ const DNSSEC_TELEMETRY_ADDR: u32 = 4;
 /// Max amount of time to spend on generating a proposal block. This should eventually have it's own configurable value.
 const PROPOSAL_ASSEMBLY_TIME: std::time::Duration = std::time::Duration::from_millis(250);
 
-// bit flags for enabling different parts catchup validation
+// Bit flags for enabling different parts of catchup validation.
 const CATCHUP_VALIDATION_MODE_CERTIFICATE: u32 = 1;
 const CATCHUP_VALIDATION_MODE_PAYSET_HASH: u32 = 2;
 const CATCHUP_VALIDATION_MODE_VERIFY_TX_SIGNATURES: u32 = 4;
@@ -62,7 +64,7 @@ pub enum ConfigError {
     //MigrateConfigError(#[from] migrate::MigrationError),
 }
 
-type Result<T> = std::result::Result<T, ConfigError>;
+pub type Result<T> = std::result::Result<T, ConfigError>;
 
 /// Local holds the per-node-instance configuration settings for the protocol.
 /// !!! WARNING !!!
@@ -93,7 +95,7 @@ pub struct Local {
     pub gossip_fanout: u32,
     pub net_address: String,
 
-    // 1 * time.Minute = 60000000000 ns
+    /// 1 * time.Minute = 60000000000 ns
     pub reconnect_time: std::time::Duration,
 
     /// What we should tell peers to connect to.
@@ -494,7 +496,7 @@ impl Local {
     }
 
     fn load_from_file(file: &impl AsRef<Path>) -> Result<Self> {
-        let c = Self::default();
+        let mut c = Self::default();
         c.version = 0; // Reset to 0 so we get the version from the loaded file.
         c.merge_from_file(file)?;
 
@@ -547,7 +549,7 @@ impl Local {
         // if user hasn't modified the default dns_bootstrap_id in the configuration
         // file and we're targeting a devnet (via genesis file),
         // we the explicitly set devnet network bootstrap.
-        if self.dns_bootstrap_id == DEFAULT_LOCAL.dns_bootstrap_id {
+        if self.dns_bootstrap_id == Local::default().dns_bootstrap_id {
             match network {
                 Devnet => return "devnet.algodev.network".to_owned(),
                 Betanet => return "betanet.algodev.network".to_owned(),
@@ -559,7 +561,8 @@ impl Local {
     /// Writes the Local settings into a root/ConfigFilename file.
     pub fn save_to_disk(&self, root: &str) -> io::Result<()> {
         let configpath = Path::new(root).join(CONFIG_FILENAME);
-        let expanded_path = shellexpand::env(&configpath.into_os_string().into_string().unwrap());
+        let configpath_str = configpath.into_os_string().into_string().unwrap();
+        let expanded_path = shellexpand::env(&configpath_str);
         return self.save_to_file(&expanded_path.unwrap());
     }
 
@@ -616,12 +619,14 @@ impl Local {
     }
 }
 
+/*
 impl Default for Local {
     /// Copies the current DEFAULT_LOCAL config.
     fn default() -> Self {
         return DEFAULT_LOCAL;
     }
 }
+*/
 
 #[derive(Serialize, Deserialize)]
 struct PhonebookBlackWhiteList {
@@ -648,7 +653,8 @@ pub fn load_phonebook(datadir: &str) -> io::Result<Vec<String>> {
 /// Writes the phonebook into a root/PhonebookFilename file.
 pub fn save_phonebook_to_disk(entries: Vec<String>, root: &str) -> Result<()> {
     let configpath = Path::new(root).join(PHONEBOOK_FILENAME);
-    let expanded_path = shellexpand::env(&configpath.into_os_string().into_string().unwrap());
+    let configpath_str = configpath.into_os_string().into_string().unwrap();
+    let expanded_path = shellexpand::env(&configpath_str);
     let mut f = fs::OpenOptions::new()
         .write(true)
         .read(false)
@@ -666,7 +672,9 @@ fn save_phonebook(entries: Vec<String>, w: &mut impl io::Write) -> Result<()> {
     return Ok(serde_json::to_writer_pretty(w, &pb)?);
 }
 
-static global_config_file_root: RwLock<PathBuf> = RwLock::new(Path::new("").to_path_buf());
+lazy_static! {
+    static ref global_config_file_root: RwLock<PathBuf> = RwLock::new(Path::new("").to_path_buf());
+}
 
 /// Retrieves the full path to a configuration file.
 /// These are global configurations - not specific to data-directory / network.
@@ -682,9 +690,9 @@ pub fn get_global_config_file_root() -> io::Result<PathBuf> {
     if gcfr.as_os_str().is_empty() {
         *gcfr = get_default_config_file_path()?;
         // TODO use permissions 0o777
-        fs::create_dir(*gcfr)?;
+        fs::create_dir(gcfr.clone())?;
     }
-    return Ok(*gcfr);
+    return Ok(gcfr.clone());
 }
 
 /// Allows overriding the root folder for global configuration files.
@@ -692,7 +700,7 @@ pub fn get_global_config_file_root() -> io::Result<PathBuf> {
 /// This will likely only change for tests.
 pub fn set_global_config_file_root(root_path: &impl AsRef<PathBuf>) -> PathBuf {
     let current_root = global_config_file_root.read().unwrap().clone();
-    *global_config_file_root.write().unwrap() = *(*root_path).as_ref();
+    *global_config_file_root.write().unwrap() = root_path.as_ref().clone();
     return current_root;
 }
 

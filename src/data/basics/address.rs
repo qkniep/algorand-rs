@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use crate::crypto;
+
 use data_encoding::BASE32_NOPAD;
 use sha2::{Digest, Sha512Trunc256};
 
@@ -10,21 +12,25 @@ use sha2::{Digest, Sha512Trunc256};
 
 const CHECKSUM_LEN: usize = 4;
 
-#[derive(Debug, PartialEq, Eq)]
-enum AddressError {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AddressError {
     InvalidBase32,
     WrongLength,
     InvalidChecksum,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Address(pub [u8; 32]);
 
 impl Address {
+    pub fn new(hash: crypto::CryptoHash) -> Self {
+        Self(hash.0)
+    }
+
     /// Tries to unmarshal the checksummed address string.
     /// Algorand address strings (base32 encoded) have a postamble which serves as the checksum of the address.
     /// When converted to an Address object representation, that checksum is dropped (after validation).
-    fn new(addr: &str) -> Result<Self, AddressError> {
+    pub fn from_str(addr: &str) -> Result<Self, AddressError> {
         let decoded = match BASE32_NOPAD.decode(addr.as_bytes()) {
             Ok(d) => d,
             _ => {
@@ -63,7 +69,7 @@ impl Address {
     }
 
     /// Returns the human-readable, checksummed version of the address
-    fn GetUserAddress(&self) -> String {
+    fn get_user_address(&self) -> String {
         self.to_string()
     }
 
@@ -80,12 +86,12 @@ impl Address {
                 return Err(AddressError::InvalidBase32);
             }
         };
-        self.0 = Address::new(&addr_str)?.0;
+        self.0 = Address::from_str(&addr_str)?.0;
         return Ok(());
     }
 
-    // IsZero checks if an address is the zero value.
-    fn is_zero(&self) -> bool {
+    /// Checks if an address is the zero value.
+    pub fn is_zero(&self) -> bool {
         *self == Address([0; 32])
     }
 }
@@ -113,14 +119,14 @@ mod tests {
         let addr = Sha512Trunc256::digest(b"randomString");
         let short_addr = Address(addr.into());
 
-        let result = Address::new(&short_addr.to_string());
+        let result = Address::from_str(&short_addr.to_string());
         assert_eq!(result, Ok(short_addr));
     }
 
     #[test]
     fn too_short() {
         let addr = "";
-        assert_eq!(Address::new(addr), Err(AddressError::WrongLength));
+        assert_eq!(Address::from_str(addr), Err(AddressError::WrongLength));
     }
 
     #[test]
@@ -131,7 +137,7 @@ mod tests {
         let mut short_addr_str = short_addr.to_string();
         short_addr_str.pop();
         short_addr_str.push('1');
-        let result = Address::new(&short_addr_str);
+        let result = Address::from_str(&short_addr_str);
         assert_eq!(result, Err(AddressError::InvalidBase32));
     }
 
@@ -143,7 +149,7 @@ mod tests {
         let mut short_addr_str = short_addr.to_string();
         short_addr_str.pop();
         short_addr_str.push(' ');
-        let result = Address::new(&short_addr_str);
+        let result = Address::from_str(&short_addr_str);
         assert_eq!(result, Err(AddressError::InvalidBase32));
     }
 
@@ -154,7 +160,7 @@ mod tests {
 
         let mut s = "4".to_owned();
         s.push_str(&short_addr.to_string());
-        let result = Address::new(&s);
+        let result = Address::from_str(&s);
         assert_eq!(result, Err(AddressError::InvalidBase32));
     }
 
@@ -167,7 +173,7 @@ mod tests {
         short_addr_str.remove(0);
         let mut s = "4".to_owned();
         s.push_str(&short_addr_str);
-        let result = Address::new(&s);
+        let result = Address::from_str(&s);
         assert_eq!(result, Err(AddressError::InvalidChecksum));
     }
 
@@ -178,15 +184,15 @@ mod tests {
 
         let mut s = " ".to_owned();
         s.push_str(&short_addr.to_string());
-        let result = Address::new(&s);
+        let result = Address::from_str(&s);
         assert_eq!(result, Err(AddressError::InvalidBase32));
     }
 
     #[test]
     fn human_readable() {
         let s = "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU";
-        let addr = Address::new(s).unwrap();
-        assert_eq!(&addr.GetUserAddress(), s);
+        let addr = Address::from_str(s).unwrap();
+        assert_eq!(&addr.get_user_address(), s);
     }
 
     #[test]
@@ -194,9 +200,9 @@ mod tests {
         let addr = "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU";
         let non_canonical = "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELV";
 
-        assert_eq!(Address::new(addr).is_ok(), true);
+        assert_eq!(Address::from_str(addr).is_ok(), true);
         assert_eq!(
-            Address::new(non_canonical),
+            Address::from_str(non_canonical),
             Err(AddressError::InvalidBase32)
         );
     }

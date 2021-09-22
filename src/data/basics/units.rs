@@ -1,34 +1,33 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
+use std::fmt;
+
+use crate::config;
 use crate::crypto;
-//use crate::config;
 
 /// A number of rounds.
-type RoundInterval = u64;
+pub type RoundInterval = u64;
 
 /// Main unit of currency. It is wrapped in a struct to nudge
 /// developers to use an overflow-checking library for any arithmetic.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct MicroAlgos(u64);
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MicroAlgos(pub u64);
 
 impl MicroAlgos {
-    fn is_zero(&self) -> bool {
+    pub fn is_zero(&self) -> bool {
         self.0 == 0
     }
 
-    fn to_u64(&self) -> u64 {
+    pub fn to_u64(&self) -> u64 {
         self.0
     }
 
-    /*
     /// The number of reward units in some number of algos.
     // TODO better doc comment
-    // TODO implement once config::ConsensusParams is implemented
-    fn RewardUnits(&self, proto: config::ConsensusParams) -> u64 {
-        return a.Raw / proto.RewardUnit
+    pub fn reward_units(&self, proto: config::ConsensusParams) -> u64 {
+        return self.0 / proto.reward_unit;
     }
-    */
 
     // We generate our own encoders and decoders for MicroAlgos
     // because we want it to appear as an integer, even though
@@ -38,9 +37,15 @@ impl MicroAlgos {
     // TODO if yes: implement the codec methods from https://github.com/algorand/go-algorand/blob/master/data/basics/units.go
 }
 
+impl fmt::Display for MicroAlgos {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "μA {}", self.0)
+    }
+}
+
 /// A protocol round index.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct Round(u64);
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Round(pub u64);
 
 impl Round {
     /// Maps a round to the identifier for which ephemeral key should be used for that round.

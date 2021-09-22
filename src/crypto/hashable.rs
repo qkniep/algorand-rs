@@ -15,7 +15,7 @@ const HASH_LEN: usize = 32;
 
 /// Represents a 32-byte (256-bit) value holding a hash digest.
 #[derive(Debug, Default, PartialEq, Eq)]
-pub struct CryptoHash([u8; HASH_LEN]);
+pub struct CryptoHash(pub [u8; HASH_LEN]);
 
 #[derive(Error, Debug)]
 pub enum HashError {
@@ -38,12 +38,12 @@ pub trait Hashable {
 
 impl CryptoHash {
     /// Returns the leading 64 bits (i.e. the first 8 bytes) of the digest and converts to uint64.
-    fn trim_to_u64(&self) -> u64 {
+    pub fn trim_to_u64(&self) -> u64 {
         u64::from_le_bytes(self.0[..8].try_into().unwrap())
     }
 
     /// Returns true iff the digest contains only zeros.
-    fn is_zero(&self) -> bool {
+    pub fn is_zero(&self) -> bool {
         self.0 == [0; HASH_LEN]
     }
 }
@@ -59,7 +59,7 @@ impl fmt::Display for CryptoHash {
 impl TryFrom<&str> for CryptoHash {
     type Error = HashError;
 
-    fn try_from(s: &str) -> Result<CryptoHash, HashError> {
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
         let decoded = BASE32_NOPAD.decode(s.as_bytes())?;
         if decoded.len() != HASH_LEN {
             return Err(HashError::WrongLength(decoded.len()));

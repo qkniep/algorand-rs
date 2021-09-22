@@ -6,7 +6,7 @@
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VrfPrivKey([u8; 64]);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct VrfPubKey([u8; 32]);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -15,17 +15,20 @@ pub struct VrfProof([u8; 80]);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VrfOutput([u8; 64]);
 
+///
 pub fn keypair_from_seed(seed: [u8; 32]) -> (VrfPubKey, VrfPrivKey) {
     unimplemented!();
 }
 
 impl VrfPrivKey {
+    ///
     fn prove_bytes(&self, bytes: &[u8]) -> Result<VrfProof, ()> {
         unimplemented!();
     }
 }
 
 impl VrfPubKey {
+    ///
     fn verify_bytes(&self, pi: &[u8], alpha: &[u8]) -> Result<VrfOutput, ()> {
         unimplemented!();
     }
@@ -66,8 +69,10 @@ mod tests {
     /// Helper function for checking a single test vector.
     /// All arguments need to be passed as hex strings.
     fn test_vector(sk_hex: &str, pk_hex: &str, alpha_hex: &str, pi_hex: &str, beta_hex: &str) {
-        // our "secret keys" are 64 bytes: the spec's 32-byte "secret keys" (which we call the "seed") followed by the 32-byte precomputed public key
-        // so the 32-byte "SK" in the test vectors is not directly decoded into a VrfPrivkey, it instead has to go through VrfKeypairFromSeed()
+        // Our "secret keys" are 64 bytes: the spec's 32-byte "secret keys"
+        // (which we call the "seed") followed by the 32-byte precomputed public key.
+        // So the 32-byte "SK" in the test vectors is not directly decoded into a VrfPrivKey,
+        // it instead has to go through `keypair_from_seed()`.
         let seed = [0u8; 32];
 
         // Decode hex

@@ -8,8 +8,8 @@ use super::Local;
 //go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example
 //go:generate $GOROOT/bin/go fmt local_defaults.go
 
-/// This variable is the "input" for the config default generator which automatically updates the DEFAULT_LOCAL variable.
-/// It's implemented in ./config/defaults_gen.rs, and should be the only "consumer" of this exported variable
+// This variable is the "input" for the config default generator which automatically updates the DEFAULT_LOCAL variable.
+// It's implemented in ./config/defaults_gen.rs, and should be the only "consumer" of this exported variable
 // TODO
 //var AutogenLocal = getVersionedDefaultLocalConfig(getLatestConfigVersion())
 
@@ -28,6 +28,7 @@ impl fmt::Display for MigrationError {
 
 impl std::error::Error for MigrationError {}
 
+///
 pub fn migrate(config: Local) -> Result<Local, MigrationError> {
     let mut new_config = config.clone();
     let latest_version = get_latest_config_version();

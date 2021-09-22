@@ -6,3 +6,8 @@ pub mod hashable;
 pub mod mnemonic;
 pub mod multisig;
 pub mod onetimesig;
+pub mod vrf;
+
+pub use hashable::*;
+pub use onetimesig::*;
+pub use vrf::*;
