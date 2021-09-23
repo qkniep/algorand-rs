@@ -1,8 +1,8 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
-//! Implementation of ECVRF-ED25519-SHA512-Elligator2 (IETF Draft 5).
-//! For specification see: https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-05
+//! Implementation of ECVRF-ED25519-SHA512-Elligator2 (IETF Draft 3).
+//! For specification see: https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03
 
 use std::convert::TryInto;
 
@@ -13,6 +13,7 @@ use sha2::{Digest, Sha512};
 use thiserror::Error;
 // TODO implement benchmarks
 
+/// A single byte string identifying ECVRF-ED25519-SHA512-Elligator2.
 const SUITE_STRING: [u8; 1] = [0x04];
 
 /// Different errors that can be raised when proving/verifying VRFs.
@@ -62,7 +63,7 @@ impl VrfKeypair {
     }
 
     /// Generates a proof for a given message using this secret key, as specified in:
-    /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-05 (section 5.1).
+    /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03 (section 5.1).
     pub fn prove_bytes(&self, bytes: &[u8]) -> Result<VrfProof, ()> {
         // Step 1: Derive public key. (not necessary, already available as self.public)
         // Step 2: H = ECVRF_hash_to_curve(Y, alpha_string)
@@ -84,7 +85,8 @@ impl VrfKeypair {
         let c = hash_points(hash_point, gamma, k * b, k * hash_point);
 
         // Step 7: s = (k + c*x) mod q
-        let s = (k + c * x).reduce();
+        let s = k + c * x;
+        println!("s: {:?}", &s.as_bytes()[..]);
 
         // Step 8: pi_string = point_to_string(Gamma) || int_to_string(c, n) || int_to_string(s, qLen)
         let gamma_str = &gamma.compress().to_bytes()[..];
@@ -104,7 +106,7 @@ impl VrfKeypair {
 
 impl VrfPublicKey {
     /// Validates a proof for a given message against this public key, as specified in:
-    /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-05 (section 5.3).
+    /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03 (section 5.3).
     fn verify_bytes(&self, proof: VrfProof, bytes: &[u8]) -> Result<VrfOutput, VrfError> {
         unimplemented!();
     }
@@ -137,7 +139,7 @@ impl Digest for TruncHasher {
         *GenericArray::from_slice(&self.0[..=63])
     }
 
-    fn chain(self, data: impl AsRef<[u8]>) -> Self {
+    fn chain(self, _: impl AsRef<[u8]>) -> Self {
         unimplemented!()
     }
     fn finalize_reset(&mut self) -> GenericArray<u8, Self::OutputSize> {
@@ -149,13 +151,13 @@ impl Digest for TruncHasher {
     fn output_size() -> usize {
         unimplemented!()
     }
-    fn digest(data: &[u8]) -> GenericArray<u8, Self::OutputSize> {
+    fn digest(_: &[u8]) -> GenericArray<u8, Self::OutputSize> {
         unimplemented!()
     }
 }
 
 /// Cryptographically hash byte string to ed25519 curve point, as specified in:
-/// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-05 (section 5.4.1.2).
+/// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03 (section 5.4.1.2).
 fn hash_to_curve(pk: &VrfPublicKey, bytes: &[u8]) -> Result<EdwardsPoint, VrfError> {
     let s = [&SUITE_STRING, &[0x01], &pk.0[..], &bytes[..]].concat();
 
@@ -178,8 +180,8 @@ fn gen_nonce(sk: &[u8; 32], data: &[u8]) -> Scalar {
     return Scalar::from_bytes_mod_order_wide(k);
 }
 
-/// Hash points, as specified in:
-/// https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03 (section 5.4.3).
+/// Hash points into a scalar, as specified in:
+/// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03 (section 5.4.3).
 fn hash_points(a: EdwardsPoint, b: EdwardsPoint, c: EdwardsPoint, d: EdwardsPoint) -> Scalar {
     let a_str = &a.compress().to_bytes()[..];
     let b_str = &b.compress().to_bytes()[..];
@@ -187,8 +189,9 @@ fn hash_points(a: EdwardsPoint, b: EdwardsPoint, c: EdwardsPoint, d: EdwardsPoin
     let d_str = &d.compress().to_bytes()[..];
     let s = [&SUITE_STRING, &[0x02], a_str, b_str, c_str, d_str].concat();
     let h = Sha512::digest(&s);
-    let trunc_h = h[..32].try_into().unwrap();
-    return Scalar::from_bits(trunc_h);
+    let mut out_bytes = [0; 32];
+    out_bytes[..16].copy_from_slice(&h[..16]);
+    return Scalar::from_bytes_mod_order(out_bytes);
 }
 
 #[cfg(test)]
@@ -199,7 +202,7 @@ mod tests {
 
     use data_encoding::HEXLOWER;
 
-    /// ECVRF-ED25519-SHA512-Elligator2 test vectors from: https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-05
+    /// ECVRF-ED25519-SHA512-Elligator2 test vectors from: https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03
     #[test]
     fn vrf_test_vectors() {
         test_vector("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", //sk
