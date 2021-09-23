@@ -6,7 +6,11 @@
 
 use std::convert::TryInto;
 
-use curve25519_dalek::{constants, edwards::EdwardsPoint, scalar::Scalar};
+use curve25519_dalek::{
+    constants,
+    edwards::{CompressedEdwardsY, EdwardsPoint},
+    scalar::Scalar,
+};
 use ed25519_dalek::{ExpandedSecretKey, PublicKey, SecretKey};
 use generic_array::GenericArray;
 use sha2::{Digest, Sha512};
@@ -15,6 +19,9 @@ use thiserror::Error;
 
 /// A single byte string identifying ECVRF-ED25519-SHA512-Elligator2.
 const SUITE_STRING: [u8; 1] = [0x04];
+
+/// A single byte string identifying ECVRF-ED25519-SHA512-Elligator2.
+const COFACTOR: u32 = 8;
 
 /// Different errors that can be raised when proving/verifying VRFs.
 #[derive(Debug, Error)]
@@ -107,8 +114,58 @@ impl VrfKeypair {
 impl VrfPublicKey {
     /// Validates a proof for a given message against this public key, as specified in:
     /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03 (section 5.3).
-    fn verify_bytes(&self, proof: VrfProof, bytes: &[u8]) -> Result<VrfOutput, VrfError> {
-        unimplemented!();
+    pub fn verify_bytes(&self, proof: VrfProof, bytes: &[u8]) -> Result<VrfOutput, VrfError> {
+        let d = proof.decode();
+        if d.is_none() {
+            return Err(VrfError::InvalidProof);
+        }
+
+        let (gamma, c, s) = d.unwrap();
+        let h = hash_to_curve(self, bytes)?;
+
+        let u = s * constants::ED25519_BASEPOINT_POINT - c * self.to_point();
+        let v = s * h - c * gamma;
+        let c_calculated = hash_points(h, gamma, u, v);
+
+        if c_calculated == c {
+            return Ok(proof.to_output());
+        } else {
+            return Err(VrfError::InvalidProof);
+        }
+    }
+
+    /// Converts the public key, which is a compressed point representation, to the curve point.
+    /// Panics if the public key does not correspond to a valid curve point.
+    fn to_point(&self) -> EdwardsPoint {
+        CompressedEdwardsY::from_slice(&self.0)
+            .decompress()
+            .unwrap()
+    }
+}
+
+impl VrfProof {
+    /// Decodes the proof into its components:
+    ///   * gamma - EC point
+    ///   * c     - 16-bit scalar value
+    ///   * s     - 32-bit scalar value
+    /// Returns None if the encoding was invalid in any way.
+    fn decode(&self) -> Option<(EdwardsPoint, Scalar, Scalar)> {
+        let gamma = CompressedEdwardsY::from_slice(&self.0[..32]).decompress()?;
+        let c_str = [&self.0[32..48], &[0; 16][..]].concat().try_into().unwrap();
+        let c = Scalar::from_canonical_bytes(c_str)?;
+        let s_str = self.0[48..80].try_into().unwrap();
+        let s = Scalar::from_canonical_bytes(s_str)?;
+        return Some((gamma, c, s));
+    }
+
+    ///
+    /// All checks should have already been done; panics if inputs are invalid.
+    fn to_output(&self) -> VrfOutput {
+        let (gamma, _, _) = self.decode().unwrap();
+        let cg = Scalar::from(COFACTOR) * gamma;
+        let s = [&SUITE_STRING, &[0x03], &cg.compress().as_bytes()[..]].concat();
+        let beta = Sha512::digest(&s).as_slice().try_into().unwrap();
+        return VrfOutput(beta);
     }
 }
 
@@ -225,8 +282,8 @@ mod tests {
             "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025", //pk
             "af82", // alpha
             "9d8663faeb6ab14a239bfc652648b34f783c2e99f758c0e1b6f4f863f9419b56", // hash
-            "926e895d308f5e328e7aa159c06eddbe56d06846abf5d98c2512235eaa57fdce6187befa109606682503b3a1424f0f729ca0418099fbd86a48093e6a8de26307b8d93e02da927e6dd5b73c8f119aee0f", // pi
-            "121b7f9b9aaaa29099fc04a94ba52784d44eac976dd1a3cca458733be5cd090a7b5fbd148444f17f8daf1fb55cb04b1ae85a626e30a54b4b0f8abf4a43314a58",                                 // beta
+            "dfa2cba34b611cc8c833a6ea83b8eb1bb5e2ef2dd1b0c481bc42ff36ae7847f6ab52b976cfd5def172fa412defde270c8b8bdfbaae1c7ece17d9833b1bcf31064fff78ef493f820055b561ece45e1009", // pi
+            "2031837f582cd17a9af9e0c7ef5a6540e3453ed894b62c293686ca3c1e319dde9d0aa489a4b59a9594fc2328bc3deff3c8a0929a369a72b1180a596e016b5ded",                                 // beta
         );
     }
 
