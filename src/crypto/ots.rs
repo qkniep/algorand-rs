@@ -348,7 +348,15 @@ impl OTS {
 impl Hashable for OTSSubkeyBatchID {
     fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>) {
         // TODO change when protocol::encode is implemented
-        (protocol::ONE_TIME_SIG_KEY1, Vec::new())
+        (
+            protocol::ONE_TIME_SIG_KEY1,
+            [
+                &self.sub_key_pk.to_bytes()[..],
+                &self.batch.to_be_bytes()[..],
+            ]
+            .concat()
+            .to_vec(),
+        )
         //return (protocol::ONE_TIME_SIG_KEY1, protocol::encode(&self));
     }
 }
@@ -356,7 +364,16 @@ impl Hashable for OTSSubkeyBatchID {
 impl Hashable for OTSSubkeyOffsetID {
     fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>) {
         // TODO change when protocol::encode is implemented
-        (protocol::ONE_TIME_SIG_KEY2, Vec::new())
+        (
+            protocol::ONE_TIME_SIG_KEY2,
+            [
+                &self.sub_key_pk.to_bytes()[..],
+                &self.batch.to_be_bytes()[..],
+                &self.offset.to_be_bytes()[..],
+            ]
+            .concat()
+            .to_vec(),
+        )
         //return (protocol::ONE_TIME_SIG_KEY2, protocol::encode(&self));
     }
 }
