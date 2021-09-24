@@ -3,6 +3,7 @@
 
 pub mod batch_verifier;
 pub mod hashable;
+pub mod merklearray;
 pub mod mnemonic;
 pub mod multisig;
 pub mod ots;

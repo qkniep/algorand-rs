@@ -11,10 +11,10 @@ use thiserror::Error;
 use crate::protocol;
 
 /// Number of bytes in the preferred hash digest used here.
-const HASH_LEN: usize = 32;
+pub const HASH_LEN: usize = 32;
 
 /// Represents a 32-byte (256-bit) value holding a hash digest.
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CryptoHash(pub [u8; HASH_LEN]);
 
 #[derive(Error, Debug)]
