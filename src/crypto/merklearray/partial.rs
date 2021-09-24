@@ -1,6 +1,7 @@
 // Copyright (C) 2021 Quentin M. Knipe <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
+use std::collections::VecDeque;
 use std::convert::TryInto;
 
 use super::*;
@@ -10,16 +11,18 @@ use crate::crypto::hashable::*;
 /// This data structure can operate in two modes:
 ///   - build up the set of sibling hints, if tree is not empty, or
 ///   - use the set of sibling hints, if tree is empty
+#[derive(Debug)]
 pub struct Siblings {
     pub tree: Tree,
-    pub hints: Vec<CryptoHash>,
+    pub hints: VecDeque<CryptoHash>,
 }
 
 /// Represents a subset of a layer (i.e., nodes at some level in the Merkle tree).
+#[derive(Debug)]
 pub struct PartialLayer(pub Vec<LayerItem>);
 
 /// Represents one element in the partial layer.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct LayerItem {
     pub pos: u64,
     pub hash: CryptoHash,
@@ -28,13 +31,9 @@ pub struct LayerItem {
 impl Siblings {
     /// Returns the sibling from tree level l (0 being the leaves) position i.
     fn get(&mut self, l: u64, i: u64) -> Result<CryptoHash, ()> {
-        let mut res = CryptoHash([0; HASH_LEN]);
-
         if self.tree.levels.is_empty() {
-            if self.hints.is_empty() {
-                let res = self.hints[0].clone();
-                self.hints.drain(..1);
-                return Ok(res);
+            if !self.hints.is_empty() {
+                return Ok(self.hints.pop_front().unwrap());
             }
 
             //err = fmt.Errorf("no more sibling hints")
@@ -46,12 +45,13 @@ impl Siblings {
             return Err(());
         }
 
-        if i < self.tree.levels[l as usize].0.len() as u64 {
-            res = self.tree.levels[l as usize].0[i as usize].clone();
-        }
+        let res = self.tree.levels[l as usize]
+            .0
+            .get(i as usize)
+            .unwrap_or(&CryptoHash([0; HASH_LEN]));
 
-        self.hints.push(res.clone());
-        return Ok(res);
+        self.hints.push_back(res.clone());
+        return Ok(res.clone());
     }
 }
 
@@ -66,14 +66,15 @@ impl PartialLayer {
     pub fn up(&self, s: &mut Siblings, l: u64, do_hash: bool) -> Result<PartialLayer, ()> {
         let mut res = PartialLayer(Vec::new());
 
-        for (mut i, LayerItem { pos, hash }) in self.0.iter().enumerate() {
+        let mut it = self.0.iter().enumerate();
+        while let Some((i, LayerItem { pos, hash })) = it.next() {
             let sibling_pos = pos ^ 1;
-            let mut sibling_hash = CryptoHash([0; HASH_LEN]);
+            let sibling_hash: CryptoHash;
 
             if i + 1 < self.0.len() && self.0[i + 1].pos == sibling_pos {
                 // If our sibling is also in the partial layer, use its hash (and skip over its position).
                 sibling_hash = self.0[i + 1].hash.clone();
-                i += 1;
+                it.next();
             } else {
                 // Ask for the sibling hash from the tree / proof.
                 sibling_hash = s.get(l, sibling_pos)?;
@@ -96,7 +97,7 @@ impl PartialLayer {
                         r: hash.clone(),
                     }
                 };
-                next_layer_hash = CryptoHash(p.hash_rep().as_slice().try_into().unwrap());
+                next_layer_hash = hash_obj(&p);
             }
 
             res.0.push(LayerItem {
@@ -106,17 +107,5 @@ impl PartialLayer {
         }
 
         return Ok(res);
-    }
-}
-
-impl std::cmp::PartialOrd for LayerItem {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.pos.partial_cmp(&other.pos)
-    }
-}
-
-impl std::cmp::Ord for LayerItem {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.pos.cmp(&other.pos)
     }
 }

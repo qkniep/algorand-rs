@@ -24,6 +24,7 @@ thiserror = "1"
 
 [dev-dependencies]
 criterion = "0.3"
+maplit = "1"
 
 [[bench]]
 name = "benches"

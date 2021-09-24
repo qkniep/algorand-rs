@@ -111,6 +111,7 @@ mod tests {
 
     #[test]
     fn invalid_sig() {
+        // TODO flaky test?
         let n = 64;
         let mut bv = BatchVerifier::with_capacity(1);
 

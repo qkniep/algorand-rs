@@ -1,17 +1,18 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
-use std::collections::HashMap;
-use std::convert::TryInto;
+use std::collections::{HashMap, VecDeque};
 
 use super::partial::*;
 use super::*;
 use crate::crypto::hashable::*;
 
-/// Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree at each height.
-#[derive(Clone)]
+const MAX_HEIGHT: usize = 64;
+
+/// Merkle tree, represented by layers of nodes (hashes) in the tree at each height.
+#[derive(Clone, Debug)]
 pub struct Tree {
-    // Level 0 is the leaves.
+    /// Levels of the tree from level 0 (leaves) to level h-1 (root).
     pub levels: Vec<Layer>,
 }
 
@@ -31,10 +32,10 @@ impl Tree {
         return Ok(tree);
     }
 
-    /// Returns the root hash of the tree.
+    /// Returns the root hash of the Merkle tree.
     pub fn root(&self) -> CryptoHash {
         // Special case: commitment to zero-length array
-        if self.levels.is_empty() {
+        if self.levels[0].0.is_empty() {
             return CryptoHash([0; HASH_LEN]);
         }
 
@@ -46,13 +47,13 @@ impl Tree {
         const VALIDATE_PROOF: bool = false;
 
         if idxs.is_empty() {
-            return Err(());
+            return Ok(Vec::new());
         }
 
         // Special case: commitment to zero-length array
         if self.levels.is_empty() {
-            return Err(());
             //return nil, fmt.Errorf("proving in zero-length commitment")
+            return Err(());
         }
 
         idxs.sort();
@@ -77,7 +78,7 @@ impl Tree {
 
         let mut s = Siblings {
             tree: self.clone(),
-            hints: Vec::new(),
+            hints: VecDeque::new(),
         };
 
         for l in 0..self.levels.len() - 1 {
@@ -98,7 +99,7 @@ impl Tree {
             }
         }
 
-        return Ok(s.hints);
+        return Ok(s.hints.into());
     }
 
     /// Ensures that the positions in elems correspond to the respective hashes in a tree with the given root hash.
@@ -122,18 +123,19 @@ impl Tree {
             pl.0.push(LayerItem { pos, hash: elem });
         }
 
-        //sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos })
-        pl.0.sort();
+        pl.0.sort_by(|a, b| a.pos.cmp(&b.pos));
 
         let mut s = Siblings {
             tree: Tree { levels: Vec::new() },
-            hints: proof.clone(),
+            hints: proof.clone().into(),
         };
 
-        for l in 0..s.hints.len() {
+        let mut l = 0;
+        while s.hints.len() > 0 || pl.0.len() > 1 {
             pl = pl.up(&mut s, l as u64, true)?;
+            l += 1;
 
-            if l > 64 {
+            if l > MAX_HEIGHT {
                 //return fmt.Errorf("Verify exceeded 64 levels, more than 2^64 leaves not supported")
                 return Err(());
             }
@@ -157,6 +159,87 @@ impl Tree {
 mod tests {
     use super::*;
 
+    use std::iter::FromIterator;
+
+    use maplit::hashmap;
+    use rand::{thread_rng, RngCore};
+
     #[test]
-    fn it_works() {}
+    fn build() {
+        const SIZE: usize = 4;
+
+        let a: Vec<String> = (0..SIZE).map(|i| format!("test{}", i).to_owned()).collect();
+        let tree = Tree::from_array(&a).unwrap();
+        assert_eq!(tree.levels.len(), 3);
+        assert_eq!(tree.levels[0].0.len(), 4);
+        assert_eq!(tree.levels[1].0.len(), 2);
+        assert_eq!(tree.levels[2].0.len(), 1);
+    }
+
+    #[test]
+    fn simple_proof() {
+        const SIZE: usize = 4;
+
+        let a: Vec<String> = (0..SIZE).map(|i| format!("test{}", i).to_owned()).collect();
+        let tree = Tree::from_array(&a).unwrap();
+        let root = tree.root();
+
+        let proof = tree.prove(&mut vec![1]).unwrap();
+        let elems = hashmap! {1 => hash_obj(&"test1".to_owned())};
+        assert!(Tree::verify(&root, elems, &proof).is_ok());
+    }
+
+    #[test]
+    fn full_test() {
+        let mut rng = thread_rng();
+        let junk = "junk".to_owned();
+
+        for size in [0, 1, 2, 3, 4, 8, 16, 32, 64, 128, 256] {
+            let a: Vec<String> = (0..size).map(|i| format!("test{}", i).to_owned()).collect();
+            let tree = Tree::from_array(&a).unwrap();
+            let root = tree.root();
+
+            let mut allpos = (0..size).collect();
+            let allmap =
+                HashMap::from_iter((0..size).map(|i| (i, hash_obj(&a[i as usize]))).into_iter());
+
+            for i in 0..size {
+                let proof = tree.prove(&mut vec![i]).unwrap();
+                let elems = hashmap! {i => hash_obj(&a[i as usize])};
+                assert!(Tree::verify(&root, elems, &proof).is_ok());
+                let elems = hashmap! {i => hash_obj(&junk)};
+                assert!(Tree::verify(&root, elems, &proof).is_err());
+            }
+
+            let proof = tree.prove(&mut allpos).unwrap();
+            assert!(Tree::verify(&root, allmap, &proof).is_ok());
+
+            let elems = hashmap! {0 => hash_obj(&junk)};
+            assert!(Tree::verify(&root, elems.clone(), &proof).is_err());
+            assert!(Tree::verify(&root, elems, &Vec::new()).is_err());
+
+            assert!(
+                tree.prove(&mut vec![size]).is_err(),
+                "no error when proving past the end"
+            );
+            let elems = hashmap! {size => hash_obj(&junk)};
+            assert!(
+                Tree::verify(&root, elems, &Vec::new()).is_err(),
+                "no error when verifying past the end"
+            );
+
+            if size > 0 {
+                let mut somepos = Vec::new();
+                let mut somemap = HashMap::new();
+                for _ in 0..10 {
+                    let pos = rng.next_u64() % size;
+                    somepos.push(pos);
+                    somemap.insert(pos, hash_obj(&a[pos as usize]));
+                }
+
+                let proof = tree.prove(&mut somepos).unwrap();
+                Tree::verify(&root, somemap, &proof).unwrap();
+            }
+        }
+    }
 }
