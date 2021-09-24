@@ -50,8 +50,8 @@ pub struct Round(pub u64);
 impl Round {
     /// Maps a round to the identifier for which ephemeral key should be used for that round.
     /// key_dilution specifies the number of keys in the bottom-level of the two-level key structure.
-    fn ots_id(&self, key_dilution: u64) -> crypto::onetimesig::OTSIdentifier {
-        return crypto::onetimesig::OTSIdentifier {
+    fn ots_id(&self, key_dilution: u64) -> crypto::ots::OTSIdentifier {
+        return crypto::ots::OTSIdentifier {
             batch: self.0 / key_dilution,
             offset: self.0 % key_dilution,
         };

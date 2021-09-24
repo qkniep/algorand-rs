@@ -36,6 +36,12 @@ pub trait Hashable {
     }
 }
 
+impl Hashable for String {
+    fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>) {
+        (protocol::MESSAGE, self.as_bytes().to_vec())
+    }
+}
+
 impl CryptoHash {
     /// Returns the leading 64 bits (i.e. the first 8 bytes) of the digest and converts to uint64.
     pub fn trim_to_u64(&self) -> u64 {

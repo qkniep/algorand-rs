@@ -5,9 +5,9 @@ pub mod batch_verifier;
 pub mod hashable;
 pub mod mnemonic;
 pub mod multisig;
-pub mod onetimesig;
+pub mod ots;
 pub mod vrf;
 
 pub use hashable::*;
-pub use onetimesig::*;
+pub use ots::*;
 pub use vrf::*;

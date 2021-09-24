@@ -76,6 +76,8 @@ impl BatchVerifier {
 mod tests {
     use super::*;
 
+    use std::convert::TryInto;
+
     use ed25519_dalek::{Keypair, SecretKey, Signer, SECRET_KEY_LENGTH};
     use rand::{distributions::Alphanumeric, thread_rng, Rng, RngCore};
 
@@ -149,6 +151,10 @@ mod tests {
     }
 
     fn random_string() -> Vec<u8> {
-        thread_rng().sample_iter(&Alphanumeric).take(7).collect()
+        thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(7)
+            .map(|c| c as u8)
+            .collect()
     }
 }
