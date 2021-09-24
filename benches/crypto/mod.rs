@@ -2,5 +2,7 @@
 // Distributed under terms of the MIT license.
 
 mod merklearray;
+mod vrf;
 
 pub use merklearray::*;
+pub use vrf::*;

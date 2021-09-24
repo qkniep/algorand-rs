@@ -93,7 +93,6 @@ impl VrfKeypair {
 
         // Step 7: s = (k + c*x) mod q
         let s = k + c * x;
-        println!("s: {:?}", &s.as_bytes()[..]);
 
         // Step 8: pi_string = point_to_string(Gamma) || int_to_string(c, n) || int_to_string(s, qLen)
         let gamma_str = &gamma.compress().to_bytes()[..];
@@ -232,7 +231,6 @@ fn gen_nonce(sk: &[u8; 32], data: &[u8]) -> Scalar {
     let h = Sha512::digest(sk);
     let trunc_h: [u8; 32] = h[32..].try_into().unwrap();
     let k_ga = Sha512::digest(&[&trunc_h, data].concat());
-    println!("k: {:x?}", k_ga.as_slice());
     let k = k_ga.as_slice().try_into().unwrap();
     return Scalar::from_bytes_mod_order_wide(k);
 }
