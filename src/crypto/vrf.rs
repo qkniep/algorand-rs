@@ -15,7 +15,6 @@ use ed25519_dalek::{ExpandedSecretKey, PublicKey, SecretKey};
 use generic_array::GenericArray;
 use sha2::{Digest, Sha512};
 use thiserror::Error;
-// TODO implement benchmarks
 
 /// A single byte string identifying ECVRF-ED25519-SHA512-Elligator2.
 const SUITE_STRING: [u8; 1] = [0x04];
