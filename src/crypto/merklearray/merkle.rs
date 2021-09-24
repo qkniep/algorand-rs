@@ -17,14 +17,9 @@ pub struct Tree {
 
 impl Tree {
     /// Constructs a Merkle tree given an array.
-    pub fn from_array(array: Vec<impl Hashable>) -> Result<Self, ()> {
+    pub fn from_array(array: &Vec<impl Hashable>) -> Result<Self, ()> {
         let mut tree = Self {
-            levels: vec![Layer(
-                array
-                    .iter()
-                    .map(|h| CryptoHash(h.hash_rep().as_slice().try_into().unwrap()))
-                    .collect(),
-            )],
+            levels: vec![Layer(array.iter().map(|h| hash_obj(h)).collect())],
         };
 
         if array.len() > 0 {
@@ -109,9 +104,9 @@ impl Tree {
     /// Ensures that the positions in elems correspond to the respective hashes in a tree with the given root hash.
     /// The proof is expected to be the proof returned by `prove()`.
     pub fn verify(
-        root: CryptoHash,
+        root: &CryptoHash,
         elems: HashMap<u64, CryptoHash>,
-        proof: Vec<CryptoHash>,
+        proof: &Vec<CryptoHash>,
     ) -> Result<(), ()> {
         if elems.is_empty() {
             if !proof.is_empty() {
@@ -132,7 +127,7 @@ impl Tree {
 
         let mut s = Siblings {
             tree: Tree { levels: Vec::new() },
-            hints: proof,
+            hints: proof.clone(),
         };
 
         for l in 0..s.hints.len() {
@@ -145,7 +140,7 @@ impl Tree {
         }
 
         let root_calculated = pl.0[0].clone();
-        if root_calculated.pos != 0 || root_calculated.hash != root {
+        if root_calculated.pos != 0 || root_calculated.hash != *root {
             //return fmt.Errorf("root mismatch")
             return Err(());
         }
