@@ -356,7 +356,7 @@ pub struct ConsensusParams {
 }
 
 /// Enumerates possible ways for the block header to commit to the set of transactions in the block.
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PaysetCommitType {
     /// Early protocols used a Merkle tree to commit to the transactions.
     /// This is no longer supported.
@@ -1092,19 +1092,18 @@ static protocol: Global = Global {
     }
 }*/
 
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn check_params() {
-        for (proto, params) in CONSENSUS {
+        for (proto, params) in &CONSENSUS.0 {
             // Our implementation of `Payset::commit()` assumes that
             // `support_signed_tx_in_block` implies not `PaysetCommitType::Unsupported`.
             if params.support_signed_tx_in_block {
                 assert_ne!(
-                    params.PaysetCommit,
+                    params.payset_commit,
                     PaysetCommitType::Unsupported,
                     "Protocol {}: support_signed_tx_in_block with PaysetCommitType::Unsupported",
                     proto
@@ -1114,7 +1113,7 @@ mod tests {
             // ApplyData requires not `PaysetCommitType::Unsupported`.
             if params.apply_data {
                 assert_ne!(
-                    params.PaysetCommit,
+                    params.payset_commit,
                     PaysetCommitType::Unsupported,
                     "Protocol {}: apply_data with PaysetCommitType::Unsupported",
                     proto
@@ -1126,18 +1125,18 @@ mod tests {
     /// Ensures that the upgrade window is a non-zero value, and confirm to be within the valid range.
     #[test]
     fn upgrade_window() {
-        for (proto, params) in CONSENSUS {
+        for (proto, params) in &CONSENSUS.0 {
             assert!(
                 params.max_upgrade_wait_rounds >= params.min_upgrade_wait_rounds,
                 "Version {}",
                 proto
             );
-            for (version, delay) in params.approved_upgrades {
+            for (&version, &delay) in &params.approved_upgrades {
                 let msg = format!("From {}\nTo {}", proto, version);
-                if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+                if params.min_upgrade_wait_rounds != 0 || params.max_upgrade_wait_rounds != 0 {
                     assert_ne!(delay, 0, "{}", msg);
-                    assert!(delay >= params.MinUpgradeWaitRounds, "{}", msg);
-                    assert!(delay <= params.MaxUpgradeWaitRounds, "{}", msg);
+                    assert!(delay >= params.min_upgrade_wait_rounds, "{}", msg);
+                    assert!(delay <= params.max_upgrade_wait_rounds, "{}", msg);
                 } else {
                     assert_eq!(delay, 0, "{}", msg);
                 }
@@ -1145,4 +1144,3 @@ mod tests {
         }
     }
 }
-*/

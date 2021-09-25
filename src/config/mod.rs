@@ -7,6 +7,8 @@ mod default;
 mod keyfile;
 //mod migrate;
 //mod version;
+#[cfg(test)]
+mod tests;
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -67,16 +69,6 @@ pub enum ConfigError {
 pub type Result<T> = std::result::Result<T, ConfigError>;
 
 /// Local holds the per-node-instance configuration settings for the protocol.
-/// !!! WARNING !!!
-///
-/// These versioned struct tags need to be maintained CAREFULLY and treated
-/// like UNIVERSAL CONSTANTS - they should not be modified once committed.
-///
-/// New fields may be added to the Local struct, along with a version tag
-/// denoting a new version. When doing so, also update the
-/// test/testdata/configs/config-v{n}.json and call "make generate" to regenerate the constants.
-///
-/// !!! WARNING !!!
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Local {
     /// Tracks the current version of the defaults so we can migrate old -> new
@@ -487,10 +479,10 @@ const COMPACT_CERT_FILENAME: &'static str = "compactcert.sqlite";
 const CONFIGURABLE_CONSENSUS_PROTOCOLS_FILENAME: &'static str = "consensus.json";
 
 impl Local {
-    /// LoadConfigFromDisk returns a Local config structure based on merging the defaults
-    /// with settings loaded from the config file from the custom dir.  If the custom file
-    /// cannot be loaded, the default config is returned (with the error from loading the
-    /// custom file).
+    /// Returns a Local config structure based on merging the defaults
+    /// with settings loaded from the config file from the custom dir.
+    /// If the custom file cannot be loaded, the default config is returned
+    /// (with the error from loading the custom file).
     fn load_from_disk(custom: &impl AsRef<OsStr>) -> Result<Self> {
         return Self::load_from_file(&Path::new(&custom).join(CONFIG_FILENAME));
     }
