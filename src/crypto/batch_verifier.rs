@@ -80,7 +80,7 @@ mod tests {
     use rand::{distributions::Alphanumeric, thread_rng, Rng, RngCore};
 
     #[test]
-    fn signle() {
+    fn single() {
         let mut bv = BatchVerifier::with_capacity(1);
         let msg = random_string();
         let kp = new_kp();
