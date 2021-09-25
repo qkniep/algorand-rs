@@ -472,7 +472,7 @@ const CONFIG_FILENAME: &'static str = "config.json";
 const PHONEBOOK_FILENAME: &'static str = "phonebook.json"; // no longer used in product - still in tests
 
 /// Prefix of the name of the ledger database files.
-const LedgerFilenamePrefix: &'static str = "ledger";
+const LEDGER_FILENAME_PREFIX: &'static str = "ledger";
 
 /// Name of the agreement database file.
 /// It is used to recover from node crashes.
@@ -674,20 +674,20 @@ fn save_phonebook(entries: Vec<String>, w: &mut impl io::Write) -> Result<()> {
 }
 
 lazy_static! {
-    static ref global_config_file_root: RwLock<PathBuf> = RwLock::new(Path::new("").to_path_buf());
+    static ref GLOBAL_CONFIG_FILE_ROOT: RwLock<PathBuf> = RwLock::new(Path::new("").to_path_buf());
 }
 
 /// Retrieves the full path to a configuration file.
 /// These are global configurations - not specific to data-directory / network.
 pub fn get_config_file_path(file: &str) -> Result<PathBuf> {
-    let rootPath = get_global_config_file_root()?;
-    return Ok(rootPath.join(file));
+    let root_path = get_global_config_file_root()?;
+    return Ok(root_path.join(file));
 }
 
 /// GetGlobalConfigFileRoot returns the current root folder for global configuration files.
 /// This will likely only change for tests.
 pub fn get_global_config_file_root() -> io::Result<PathBuf> {
-    let mut gcfr = global_config_file_root.write().unwrap();
+    let mut gcfr = GLOBAL_CONFIG_FILE_ROOT.write().unwrap();
     if gcfr.as_os_str().is_empty() {
         *gcfr = get_default_config_file_path()?;
         // TODO use permissions 0o777
@@ -700,8 +700,8 @@ pub fn get_global_config_file_root() -> io::Result<PathBuf> {
 /// It returns the current one so it can be restored, if desired.
 /// This will likely only change for tests.
 pub fn set_global_config_file_root(root_path: &impl AsRef<PathBuf>) -> PathBuf {
-    let current_root = global_config_file_root.read().unwrap().clone();
-    *global_config_file_root.write().unwrap() = root_path.as_ref().clone();
+    let current_root = GLOBAL_CONFIG_FILE_ROOT.read().unwrap().clone();
+    *GLOBAL_CONFIG_FILE_ROOT.write().unwrap() = root_path.as_ref().clone();
     return current_root;
 }
 

@@ -46,7 +46,7 @@ pub fn is_part_key_filename(filename: &str) -> bool {
 /// Returns the account name given a root key filename.
 ///
 /// If filename is not a valid root key filename, this returns the filename unchanged.
-pub fn AccountNameFromRootKeyFilename(filename: &str) -> String {
+pub fn account_name_from_root_key_filename(filename: &str) -> String {
     return filename.trim_end_matches(".rootkey").to_owned();
 }
 

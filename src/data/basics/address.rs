@@ -73,23 +73,6 @@ impl Address {
         self.to_string()
     }
 
-    /// Returns the address string as an Vec of bytes
-    fn MarshalText(&self) -> Vec<u8> {
-        self.to_string().as_bytes().to_vec()
-    }
-
-    /// Initializes the Address from an Vec of bytes.
-    fn UnmarshalText(&mut self, text: Vec<u8>) -> Result<(), AddressError> {
-        let addr_str = match String::from_utf8(text) {
-            Ok(s) => s,
-            _ => {
-                return Err(AddressError::InvalidBase32);
-            }
-        };
-        self.0 = Address::from_str(&addr_str)?.0;
-        return Ok(());
-    }
-
     /// Checks if an address is the zero value.
     pub fn is_zero(&self) -> bool {
         *self == Address([0; 32])

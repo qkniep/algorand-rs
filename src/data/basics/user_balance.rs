@@ -42,23 +42,23 @@ pub const MAX_ENCODED_ACCOUNT_DATA_SIZE: usize = 850000;
 /// with `config.Consensus[protocol.ConsensusCurrentVersion].MaxAssetsPerAccount`; note that the decoded
 /// parameter is used only for protecting the decoder against malicious encoded account data stream.
 /// Protocol-specific constains would be tested once the decoding is complete.
-const encodedMaxAssetsPerAccount: usize = 1024;
+const MAX_ENCODED_ASSETS_PER_ACCOUNT: usize = 1024;
 
 /// Decoder limit for number of opted-in apps in a single account.
 /// It is verified in `test_encoded_account_allocation_bounds` to align with
 /// `config.Consensus[protocol.ConsensusCurrentVersion].MaxppsOptedIn`.
-pub const EncodedMaxAppLocalStates: usize = 64;
+pub const MAX_ENCODED_APP_LOCAL_STATES: usize = 64;
 
 /// Decoder limit for number of created apps in a single account.
 /// It is verified in `test_encoded_account_allocation_bounds` to align with
 /// `config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsCreated`.
-pub const EncodedMaxAppParams: usize = 64;
+pub const MAX_ENCODED_APP_PARAMS: usize = 64;
 
 /// Decoder limit for the length of a key/value store.
 /// It is verified in `test_encoded_account_allocation_bounds` to align with
 /// `config.Consensus[protocol.ConsensusCurrentVersion].MaxLocalSchemaEntries` and
 /// `config.Consensus[protocol.ConsensusCurrentVersion].MaxGlobalSchemaEntries`.
-pub const EncodedMaxKeyValueEntries: usize = 1024;
+pub const MAX_ENCODED_KEY_VALUE_ENTRIES: usize = 1024;
 
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

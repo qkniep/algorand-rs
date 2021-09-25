@@ -162,7 +162,7 @@ pub struct ConsensusParams {
     pub pending_residue_rewards: bool,
 
     /// Asset support.
-    pub Asset: bool,
+    pub asset: bool,
 
     /// Max number of assets per account.
     pub max_assets_per_account: i32,
@@ -174,7 +174,7 @@ pub struct ConsensusParams {
     pub max_asset_unit_name_bytes: i32,
 
     /// Max length of asset URL.
-    pub max_asset_uRLBytes: i32,
+    pub max_asset_url_bytes: i32,
 
     /// Support sequential transaction counter `tx_counter`.
     pub tx_counter: bool,
@@ -207,7 +207,7 @@ pub struct ConsensusParams {
     pub support_rekeying: bool,
 
     /// Application support.
-    pub Application: bool,
+    pub application: bool,
 
     /// Max number of application_args for an application_call transaction.
     pub max_app_args: i32,
@@ -331,7 +331,7 @@ pub struct ConsensusParams {
     pub compact_cert_weight_threshold: u32,
 
     /// Security parameter (k+q) for the compact certificate scheme.
-    pub compact_cert_sec_kQ: u32,
+    pub compact_cert_sec_kq: u32,
 
     /// Adds an extra field to the apply_data. The field contains the amount of the remaining
     /// asset that were sent to the close-to address.
@@ -783,7 +783,7 @@ fn init_consensus_protocols(consensus: &mut ConsensusProtocols) {
     v18.pending_residue_rewards = true;
     v18.approved_upgrades = HashMap::new();
     v18.tx_counter = true;
-    v18.Asset = true;
+    v18.asset = true;
     v18.logic_sig_version = 1;
     v18.logic_sig_max_size = 1000;
     v18.logic_sig_max_cost = 20_000;
@@ -794,7 +794,7 @@ fn init_consensus_protocols(consensus: &mut ConsensusProtocols) {
     v18.support_become_non_participating_transactions = true;
     v18.max_asset_name_bytes = 32;
     v18.max_asset_unit_name_bytes = 8;
-    v18.max_asset_uRLBytes = 32;
+    v18.max_asset_url_bytes = 32;
 
     // consensus_v19 is the official spec commit (teal, assets, group tx)
     let mut v19 = v18.clone();
@@ -854,7 +854,7 @@ fn init_consensus_protocols(consensus: &mut ConsensusProtocols) {
     v24.logic_sig_version = 2;
 
     // Enable application support
-    v24.Application = true;
+    v24.application = true;
 
     // Enable rekeying
     v24.support_rekeying = true;
@@ -965,7 +965,7 @@ fn init_consensus_protocols(consensus: &mut ConsensusProtocols) {
     v28.max_extra_app_program_pages = 3;
     v28.max_app_program_len = 2048;
     // Increase asset URL length to allow for IPFS URLs
-    v28.max_asset_uRLBytes = 96;
+    v28.max_asset_url_bytes = 96;
     // Let the bytes value take more space. Key+Value is still limited to 128
     v28.max_app_bytes_value_len = 128;
 
@@ -1034,7 +1034,7 @@ fn init_consensus_protocols(consensus: &mut ConsensusProtocols) {
     v_future.compact_cert_voters_lookback = 16;
     // TODO does this make sense?
     v_future.compact_cert_weight_threshold = ((1u64 << 32) * 30 / 100) as u32;
-    v_future.compact_cert_sec_kQ = 128;
+    v_future.compact_cert_sec_kq = 128;
 
     consensus.0.insert(protocol::ConsensusVersion::V7, v7);
     consensus.0.insert(protocol::ConsensusVersion::V8, v8);
