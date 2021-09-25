@@ -23,10 +23,8 @@ impl Tree {
             levels: vec![Layer(array.iter().map(|h| hash_obj(h)).collect())],
         };
 
-        if array.len() > 0 {
-            while tree.top_layer().0.len() > 1 {
-                tree.levels.push(tree.top_layer().up());
-            }
+        while tree.top_layer().0.len() > 1 {
+            tree.levels.push(tree.top_layer().up());
         }
 
         return Ok(tree);
@@ -77,7 +75,7 @@ impl Tree {
         }
 
         let mut s = Siblings {
-            tree: self.clone(),
+            tree: &self,
             hints: VecDeque::new(),
         };
 
@@ -92,7 +90,7 @@ impl Tree {
         }
 
         if VALIDATE_PROOF {
-            let root_calculated = pl.0[0].clone();
+            let root_calculated = &pl.0[0];
             if root_calculated.pos != 0 || root_calculated.hash != self.top_layer().0[0] {
                 //return nil, fmt.Errorf("internal error: root mismatch during proof")
                 return Err(());
@@ -125,8 +123,9 @@ impl Tree {
 
         pl.0.sort_by(|a, b| a.pos.cmp(&b.pos));
 
+        let tree = Tree { levels: Vec::new() };
         let mut s = Siblings {
-            tree: Tree { levels: Vec::new() },
+            tree: &tree,
             hints: proof.clone().into(),
         };
 

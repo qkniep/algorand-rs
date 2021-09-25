@@ -18,6 +18,7 @@ dependencies = [
  "libsecp256k1",
  "maplit",
  "rand 0.7.3",
+ "rayon",
  "rmp",
  "serde",
  "serde_json",

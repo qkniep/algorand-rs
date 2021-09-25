@@ -1,6 +1,8 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
+use rayon::prelude::*;
+
 use crate::crypto::*;
 use crate::protocol;
 
@@ -19,26 +21,21 @@ impl Layer {
     /// Takes a Layer representing some level in the tree, and calculates the next-higher level in the tree,
     /// represented as a Layer.
     pub fn up(&self) -> Self {
-        let n = self.0.len();
-        let mut res = Layer(Vec::with_capacity((n + 1) / 2));
+        let v = self
+            .0
+            .par_chunks(2)
+            .map(|c| {
+                hash_obj(&Pair {
+                    l: c[0].clone(),
+                    r: c.get(1).unwrap_or(&Default::default()).clone(),
+                })
+            })
+            .collect();
 
-        // TODO use some equivalent of Go workers
-        for i in (0..n).step_by(2) {
-            let mut p = Pair {
-                l: self.0[i].clone(),
-                r: Default::default(),
-            };
-            if i + 1 < n {
-                p.r = self.0[i + 1].clone();
-            }
-            res.0.push(hash_obj(&p));
-        }
-
-        return res;
+        return Layer(v);
     }
 }
 
-// TODO optimized hash_obj ala go-algorand?
 impl Hashable for Pair {
     fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>) {
         let mut buf = [0; 2 * HASH_LEN];

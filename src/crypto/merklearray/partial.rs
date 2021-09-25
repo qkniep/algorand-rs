@@ -2,7 +2,6 @@
 // Distributed under terms of the MIT license.
 
 use std::collections::VecDeque;
-use std::convert::TryInto;
 
 use super::*;
 use crate::crypto::hashable::*;
@@ -12,8 +11,8 @@ use crate::crypto::hashable::*;
 ///   - build up the set of sibling hints, if tree is not empty, or
 ///   - use the set of sibling hints, if tree is empty
 #[derive(Debug)]
-pub struct Siblings {
-    pub tree: Tree,
+pub struct Siblings<'a> {
+    pub tree: &'a Tree,
     pub hints: VecDeque<CryptoHash>,
 }
 
@@ -28,7 +27,7 @@ pub struct LayerItem {
     pub hash: CryptoHash,
 }
 
-impl Siblings {
+impl Siblings<'_> {
     /// Returns the sibling from tree level l (0 being the leaves) position i.
     fn get(&mut self, l: u64, i: u64) -> Result<CryptoHash, ()> {
         if self.tree.levels.is_empty() {
@@ -62,7 +61,7 @@ impl PartialLayer {
     /// The implementation is deterministic to ensure that up() asks for siblings
     /// in the same order both when generating a proof, as well as when checking the proof.
     ///
-    /// If doHash is false, fill in zero hashes, which suffices for constructing a proof.
+    /// If `do_hash` is false, fill in zero hashes, which suffices for constructing a proof.
     pub fn up(&self, s: &mut Siblings, l: u64, do_hash: bool) -> Result<PartialLayer, ()> {
         let mut res = PartialLayer(Vec::new());
 
@@ -88,7 +87,7 @@ impl PartialLayer {
                     // We are left
                     Pair {
                         l: hash.clone(),
-                        r: sibling_hash.clone(),
+                        r: sibling_hash,
                     }
                 } else {
                     // We are right

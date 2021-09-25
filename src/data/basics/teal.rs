@@ -176,7 +176,6 @@ impl fmt::Display for TealType {
         match self {
             TealType::Bytes => write!(f, "{}", "b"),
             TealType::Uint => write!(f, "{}", "u"),
-            _ => write!(f, "{}", "?"),
         }
     }
 }

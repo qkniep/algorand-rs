@@ -551,8 +551,9 @@ impl Local {
         // we the explicitly set devnet network bootstrap.
         if self.dns_bootstrap_id == Local::default().dns_bootstrap_id {
             match network {
-                Devnet => return "devnet.algodev.network".to_owned(),
-                Betanet => return "betanet.algodev.network".to_owned(),
+                DEVNET => return "devnet.algodev.network".to_owned(),
+                BETANET => return "betanet.algodev.network".to_owned(),
+                _ => {}
             }
         }
         return self.dns_bootstrap_id.replace("<network>", &network);
