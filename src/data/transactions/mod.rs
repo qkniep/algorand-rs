@@ -13,6 +13,9 @@ pub mod signed_tx;
 pub mod teal;
 pub mod transaction;
 
+#[cfg(test)]
+pub mod tests;
+
 pub use application::*;
 pub use asset::*;
 pub use compactcert::*;

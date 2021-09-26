@@ -22,7 +22,7 @@ const ENCODED_MAX_FOREIGN_APPS: u32 = 32;
 const ENCODED_MAX_FOREIGN_ASSETS: u32 = 32;
 
 /// Captures the transaction fields used for all interactions with applications.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AppCallFields {
     /// Is 0 when creating an application, and nonzero when calling an existing application.
     pub application_id: basics::AppIndex,
@@ -113,6 +113,12 @@ pub enum OnCompletion {
     /// DeleteApplicationOC indicates that an application transaction will
     /// delete the AppParams for the application from the creator's balance record
     DeleteApplicationOC,
+}
+
+impl Default for OnCompletion {
+    fn default() -> Self {
+        OnCompletion::NoOpOC
+    }
 }
 
 impl AppCallFields {

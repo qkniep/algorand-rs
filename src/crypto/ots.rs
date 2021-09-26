@@ -85,7 +85,7 @@ pub type OTSVerifier = PublicKey;
 #[derive(Serialize, Deserialize)]
 // TODO use VecDeque instead of Vec for batches and offsets to facilitate deletions
 pub struct OTSSecrets {
-    verifier: OTSVerifier,
+    pub verifier: OTSVerifier,
 
     /// First batch whose subkey appears in Batches.
     first_batch: u64,
@@ -111,7 +111,7 @@ pub struct OTSSecrets {
 impl OTSSecrets {
     /// Creates a limited number of secrets that sign messages under `OTSIdentifier`s in the range
     /// [start_batch, start_batch+num_batches), i.e. including start_batch and excludes start_batch+num_batches.
-    fn generate(start_batch: u64, num_batches: u64) -> OTSSecrets {
+    pub fn generate(start_batch: u64, num_batches: u64) -> OTSSecrets {
         let kp = Keypair::generate(&mut OsRng {});
         let mut subkeys = Vec::with_capacity(num_batches.try_into().unwrap());
 

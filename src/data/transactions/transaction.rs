@@ -39,7 +39,7 @@ pub struct SpecialAddresses {
 }
 
 /// Captures the fields common to every transaction type.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Header {
     pub sender: basics::Address,
     pub fee: basics::MicroAlgos,
@@ -205,13 +205,13 @@ impl Transaction {
     }
 
     /// Checks if the transaction involves a given address.
-    fn MatchAddress(&self, addr: basics::Address, spec: SpecialAddresses) -> bool {
+    fn match_address(&self, addr: basics::Address, spec: SpecialAddresses) -> bool {
         self.relevant_addrs(spec).contains(&addr)
     }
 
     /// Checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger).
     /// It does not check signatures!
-    fn is_well_formed(
+    pub fn is_well_formed(
         &self,
         spec: &SpecialAddresses,
         proto: &config::ConsensusParams,
@@ -548,7 +548,7 @@ impl Transaction {
     /// This function is to be used for calculating the fee.
     /// Note that it may be an underestimate if the transaction is signed in an unusual way
     /// (e.g., with an authaddr or via multisig or logicsig).
-    fn estimate_encoded_size(&self) -> usize {
+    pub fn estimate_encoded_size(&self) -> usize {
         // Make a signed transaction with a nonzero signature and encode it.
         // TODO make Transaction impl Clone or let SignedTx use &Transaction
         /*let stx = SignedTx {
@@ -594,71 +594,4 @@ impl TxContext for ExplicitTxContext {
     fn genesis_hash(&self) -> CryptoHash {
         self.gen_hash.clone()
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use rand::{thread_rng, RngCore};
-
-    #[test]
-    fn estimate_encoded_size() {
-        let addr =
-            basics::Address::from_str("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
-                .unwrap();
-
-        let mut rng = thread_rng();
-        let mut buf = [0; 10];
-        rng.fill_bytes(&mut buf);
-
-        let proto = &config::CONSENSUS.0[&protocol::CURRENT_CONSENSUS_VERSION];
-        let tx = Transaction::Payment(
-            Header {
-                sender: addr.clone(),
-                fee: basics::MicroAlgos(100),
-                first_valid: basics::Round(1000),
-                last_valid: basics::Round(1000 + proto.max_tx_life),
-                note: buf.to_vec(),
-                genesis_id: "".to_owned(),
-                genesis_hash: CryptoHash([0; 32]),
-                group: CryptoHash([0; 32]),
-                lease: [0; 32],
-                rekey_to: basics::Address([0; 32]),
-            },
-            PaymentFields {
-                receiver: addr,
-                amount: basics::MicroAlgos(100),
-                close_remainder_to: None,
-            },
-        );
-
-        assert_eq!(tx.estimate_encoded_size(), 200);
-    }
-
-    /*
-    fn generate_dummy_go_nonparticpating_tx(addr basics.Address) (tx Transaction) {
-        buf := make([]byte, 10)
-        crypto.RandBytes(buf[:])
-
-        proto := config.Consensus[protocol.ConsensusCurrentVersion]
-        tx = Transaction{
-            Type: protocol.KeyRegistrationTx,
-            Header: Header{
-                Sender:     addr,
-                Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-                FirstValid: 1,
-                LastValid:  300,
-            },
-            KeyregTxnFields: KeyregTxnFields{
-                Nonparticipation: true,
-                VoteFirst:        0,
-                VoteLast:         0,
-            },
-        }
-
-        tx.KeyregTxnFields.Nonparticipation = true
-        return tx
-    }
-    */
 }
