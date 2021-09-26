@@ -1,10 +1,13 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
+use serde::{Deserialize, Serialize};
+
 use crate::data::basics;
 
 /// Fields used for asset allocation, re-configuration, and destruction.
-struct AssetConfigTxnFields {
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetConfigFields {
     /// ConfigAsset is the asset being configured or destroyed.
     /// A zero value means allocation.
     pub config_asset: basics::AssetIndex,
@@ -15,7 +18,8 @@ struct AssetConfigTxnFields {
 }
 
 /// Fields used for asset transfers.
-struct AssetTransferTxnFields {
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetTransferFields {
     pub transfer_asset: basics::AssetIndex,
 
     /// The amount of asset to transfer.
@@ -37,7 +41,8 @@ struct AssetTransferTxnFields {
 }
 
 /// Fields used for freezing asset slots.
-struct AssetFreezeTxnFields {
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetFreezeFields {
     /// Address of the account whose asset slot is being frozen or un-frozen.
     pub freeze_account: basics::Address,
 
@@ -46,12 +51,4 @@ struct AssetFreezeTxnFields {
 
     /// The new frozen value.
     pub asset_frozen: bool,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {}
 }

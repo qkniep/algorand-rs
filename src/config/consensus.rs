@@ -39,15 +39,15 @@ pub struct ConsensusParams {
     pub default_upgrade_wait_rounds: u64,
     pub min_upgrade_wait_rounds: u64,
     pub max_upgrade_wait_rounds: u64,
-    pub max_version_string_len: i32,
+    pub max_version_string_len: u32,
 
     /// Determines the maximum number of bytes that transactions can take up in a block.
     /// Specifically, the sum of the lengths of encodings of each transaction
     /// in a block must not exceed `max_tx_bytes_per_block`.
-    pub max_tx_bytes_per_block: i32,
+    pub max_tx_bytes_per_block: u32,
 
     /// The maximum size of a transaction's Note field.
-    pub max_tx_note_bytes: i32,
+    pub max_tx_note_bytes: u32,
 
     /// How long a transaction can be live for:
     /// The maximum difference between `last_valid` and `first_valid`.
@@ -165,16 +165,16 @@ pub struct ConsensusParams {
     pub asset: bool,
 
     /// Max number of assets per account.
-    pub max_assets_per_account: i32,
+    pub max_assets_per_account: u32,
 
     /// Max length of asset name.
-    pub max_asset_name_bytes: i32,
+    pub max_asset_name_bytes: u32,
 
     /// Max length of asset unit name.
-    pub max_asset_unit_name_bytes: i32,
+    pub max_asset_unit_name_bytes: u32,
 
     /// Max length of asset URL.
-    pub max_asset_url_bytes: i32,
+    pub max_asset_url_bytes: u32,
 
     /// Support sequential transaction counter `tx_counter`.
     pub tx_counter: bool,
@@ -183,7 +183,7 @@ pub struct ConsensusParams {
     pub support_tx_groups: bool,
 
     /// Max group size.
-    pub max_tx_group_size: i32,
+    pub max_tx_group_size: u32,
 
     /// Support for transaction leases.
     /// Note: If `fix_transaction_leases` is not set, the transaction leases supported are faulty;
@@ -210,60 +210,60 @@ pub struct ConsensusParams {
     pub application: bool,
 
     /// Max number of application_args for an application_call transaction.
-    pub max_app_args: i32,
+    pub max_app_args: u32,
 
     /// Max for `sum([len(arg) for arg in tx.application_args])`.
-    pub max_app_total_arg_len: i32,
+    pub max_app_total_arg_len: u32,
 
     /// Maximum byte length of application approval program or clear state.
     /// When max_extra_app_program_pages > 0, this is the size of those pages.
     /// So two "extra pages" would mean 3*max_app_program_len bytes are available.
-    pub max_app_program_len: i32,
+    pub max_app_program_len: u32,
 
     /// Maximum total length of an application's programs (approval + clear state).
     /// When max_extra_app_program_pages > 0, this is the size of those pages.
     /// So two "extra pages" would mean 3*max_app_total_program_len bytes are available.
-    pub max_app_total_program_len: i32,
+    pub max_app_total_program_len: u32,
 
     /// Extra length for application program in pages. A page is `max_app_program_len` bytes.
-    pub max_extra_app_program_pages: i32,
+    pub max_extra_app_program_pages: u32,
 
     /// Maximum number of accounts in the application_call Accounts field.
     /// This determines, in part, the maximum number of balance records accessed by a single transaction.
-    pub max_app_tx_accounts: i32,
+    pub max_app_tx_accounts: u32,
 
     /// Maximum number of app ids in the application_call foreign_apps field.
     /// These are the only applications besides the called application
     /// for which global state may be read in the transaction.
-    pub max_app_tx_foreign_apps: i32,
+    pub max_app_tx_foreign_apps: u32,
 
     /// Maximum number of asset ids in the application_call foreign_assets field.
     /// These are the only assets for which the asset parameters may be read in the transaction.
-    pub max_app_tx_foreign_assets: i32,
+    pub max_app_tx_foreign_assets: u32,
 
     /// Maximum number of "foreign references" (accounts, asa, app) that can be attached to a single app call.
-    pub max_app_total_tx_references: i32,
+    pub max_app_total_tx_references: u32,
 
     /// Maximum cost of application approval program or clear state program.
-    pub max_app_program_cost: i32,
+    pub max_app_program_cost: u32,
 
     /// Maximum length of a key used in an application's global or local key/value store.
-    pub max_app_key_len: i32,
+    pub max_app_key_len: u32,
 
     /// Maximum length of a bytes value used in an application's global or local key/value store.
-    pub max_app_bytes_value_len: i32,
+    pub max_app_bytes_value_len: u32,
 
     /// Maximum sum of the lengths of the key and value of one app state entry.
-    pub max_app_sum_key_value_lens: i32,
+    pub max_app_sum_key_value_lens: u32,
 
     /// Maximum number of inner transactions that can be created by an app call.
-    pub max_inner_transactions: i32,
+    pub max_inner_transactions: u32,
 
     /// Maximum number of applications a single account can create and store `app_params` for at once.
-    pub max_apps_created: i32,
+    pub max_apps_created: u32,
 
     /// Maximum number of applications a single account can opt in to and store `app_local_state` for at once.
-    pub max_apps_opted_in: i32,
+    pub max_apps_opted_in: u32,
 
     /// Flat `min_balance` requirement for creating a single application and storing its `app_params`.
     pub app_flat_params_min_balance: u64,
@@ -378,10 +378,10 @@ impl Default for PaysetCommitType {
 /// Defines a set of supported protocol versions and their
 /// corresponding parameters.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct ConsensusProtocols(HashMap<protocol::ConsensusVersion, ConsensusParams>);
+pub struct ConsensusProtocols(pub HashMap<protocol::ConsensusVersion, ConsensusParams>);
 
 lazy_static! {
-    static ref CONSENSUS: ConsensusProtocols = {
+    pub static ref CONSENSUS: ConsensusProtocols = {
         let mut cp = ConsensusProtocols::new();
         init_consensus_protocols(&mut cp);
         load_configurable_consensus_protocols(".", &mut cp);
@@ -444,7 +444,7 @@ var MaxExtraAppProgramLen int
 var MaxAvailableAppProgramLen int
 */
 
-fn check_set_max(value: i32, cur_max: &mut i32) {
+fn check_set_max(value: u32, cur_max: &mut u32) {
     if value > *cur_max {
         *cur_max = value;
     }

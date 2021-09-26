@@ -13,6 +13,7 @@ use curve25519_dalek::{
 };
 use ed25519_dalek::{ExpandedSecretKey, PublicKey, SecretKey};
 use generic_array::GenericArray;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512};
 use thiserror::Error;
 
@@ -48,7 +49,7 @@ pub struct VrfKeypair {
     public: VrfPublicKey,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VrfPublicKey([u8; 32]);
 
 #[derive(Clone, Debug, PartialEq, Eq)]

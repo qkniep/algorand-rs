@@ -1,34 +1,25 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
-use std::fmt;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use super::*;
 use crate::config;
 use crate::data::*;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
 pub enum PaymentError {
+    #[error("transaction cannot close account to its sender")]
     CannotCloseToSender,
+    #[error("cannot spend from fee sink's address")]
     CannotSpendFromFeeSink,
+    #[error("cannot close fee sink")]
     CannotCloseFeeSink,
 }
 
-impl fmt::Display for PaymentError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::CannotCloseToSender => {
-                write!(f, "transaction cannot close account to its sender")
-            }
-            Self::CannotSpendFromFeeSink => write!(f, "cannot spend from fee sink's address"),
-            Self::CannotCloseFeeSink => write!(f, "cannot close fee sink"),
-        }
-    }
-}
-
-impl std::error::Error for PaymentError {}
-
 /// The fields used by payment transactions.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PaymentFields {
     pub receiver: basics::Address,
     pub amount: basics::MicroAlgos,
@@ -39,13 +30,13 @@ pub struct PaymentFields {
 }
 
 impl PaymentFields {
-    fn check_spender(
+    pub fn check_spender(
         &self,
-        header: Header,
-        spec: SpecialAddresses,
-        proto: config::ConsensusParams,
+        header: &Header,
+        spec: &SpecialAddresses,
+        proto: &config::ConsensusParams,
     ) -> Result<(), PaymentError> {
-        if Some(header.sender) == self.close_remainder_to {
+        if Some(&header.sender) == self.close_remainder_to.as_ref() {
             return Err(PaymentError::CannotCloseToSender);
         }
 

@@ -3,10 +3,11 @@
 
 use std::fmt;
 
-use crate::crypto;
-
 use data_encoding::BASE32_NOPAD;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512Trunc256};
+
+use crate::crypto;
 
 // TODO implement benchmarks
 
@@ -19,7 +20,7 @@ pub enum AddressError {
     InvalidChecksum,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Address(pub [u8; 32]);
 
 impl Address {

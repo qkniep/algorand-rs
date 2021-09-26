@@ -5,12 +5,13 @@ use std::collections::HashMap;
 use std::fmt;
 
 use data_encoding::HEXLOWER;
+use serde::{Deserialize, Serialize};
 
 use crate::config;
 use crate::data::basics::MicroAlgos;
 
 /// Actions that may be performed when applying a delta to a TEAL key/value store.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeltaAction {
     /// Indicates that a TEAL byte slice should be stored at a key.
     SetBytes,
@@ -23,7 +24,7 @@ pub enum DeltaAction {
 }
 
 /// Links a DeltaAction with a value to be set.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValueDelta {
     pub action: DeltaAction,
     pub bytes: Vec<u8>,
@@ -43,7 +44,7 @@ impl ValueDelta {
 
 /// Map from key/value store keys to ValueDeltas, indicating what should happen for that key.
 //msgp:allocbound StateDelta config.MaxStateDeltaKeys
-#[derive(PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StateDelta(HashMap<String, ValueDelta>);
 
 /*
@@ -105,7 +106,7 @@ impl StateDelta {
 }
 
 /// Sets maximums on the number of each type that may be stored.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StateSchema {
     pub num_uint: u64,
     pub num_byte_slice: u64,

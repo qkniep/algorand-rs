@@ -5,6 +5,7 @@ use std::convert::TryInto;
 
 use ed25519::Signature;
 use ed25519_dalek::{Keypair, PublicKey, Signer};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512Trunc256};
 
 use crate::crypto::batch_verifier::BatchVerifier;
@@ -31,14 +32,14 @@ pub enum MultisigError {
 #[derive(Debug, PartialEq, Eq)]
 struct MultisigAddr([u8; 32]);
 
-#[derive(Default, Debug, PartialEq, Eq)]
-struct MultisigSubsig {
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MultisigSubsig {
     pub key: PublicKey,
     pub sig: Option<Signature>,
 }
 
-#[derive(Default, Debug, PartialEq, Eq)]
-struct MultisigSignature {
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MultisigSignature {
     pub version: u8,
     pub threshold: u8,
     pub subsigs: Vec<MultisigSubsig>,

@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 use crate::config;
 use crate::crypto;
 
@@ -11,7 +13,7 @@ pub type RoundInterval = u64;
 
 /// Main unit of currency. It is wrapped in a struct to nudge
 /// developers to use an overflow-checking library for any arithmetic.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct MicroAlgos(pub u64);
 
 impl MicroAlgos {
@@ -44,8 +46,14 @@ impl fmt::Display for MicroAlgos {
 }
 
 /// A protocol round index.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Round(pub u64);
+
+impl fmt::Display for Round {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl Round {
     /// Maps a round to the identifier for which ephemeral key should be used for that round.

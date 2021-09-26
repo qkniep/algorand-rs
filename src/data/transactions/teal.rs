@@ -3,12 +3,15 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
+use super::*;
 use crate::data::basics;
 
 /// EvalDelta stores StateDeltas for an application's global key/value store, as
 /// well as StateDeltas for some number of accounts holding local state for that
 /// application
-#[derive(PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvalDelta {
     pub global_delta: basics::StateDelta,
 
@@ -16,12 +19,12 @@ pub struct EvalDelta {
     /// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]
     pub local_deltas: HashMap<u64, basics::StateDelta>,
 
-    pub logs: Vec<string>,
+    pub logs: Vec<String>,
 
     /// Intentionally, temporarily wrong - need to decide how to
-    /// allocbound properly when structure is recursive.  Even a bound
-    /// of 2 would allow arbitrarily large object if deep.
-    pub inner_txs: Vec<SignedTxnWithAD>,
+    /// allocbound properly when structure is recursive.
+    /// Even a bound of 2 would allow arbitrarily large object if deep.
+    pub inner_txs: Vec<SignedTxWithAD>,
 }
 
 /*

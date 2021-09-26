@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 use super::*;
 use crate::config;
 use crate::crypto::{self, hashable::Hashable};
@@ -266,8 +268,8 @@ pub type AssetIndex = u64;
 
 /// Unique integer index of an application that can be used to look up the creator of the application,
 /// whose balance record contains the AppParams.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct AppIndex(u64);
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppIndex(pub u64);
 
 /// Represents either an AssetIndex or AppIndex, which come from the same namespace of indices as each other
 /// (both assets and apps are "creatables")
@@ -302,7 +304,7 @@ pub struct AssetHolding {
 }
 
 /// Describes the parameters of an asset.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetParams {
     /// Specifies the total number of units of this asset created.
     pub total: u64,

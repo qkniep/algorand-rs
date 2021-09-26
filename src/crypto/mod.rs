@@ -9,6 +9,10 @@ pub mod multisig;
 pub mod ots;
 pub mod vrf;
 
+pub use ed25519::{Signature, SIGNATURE_LENGTH};
+pub use ed25519_dalek::Keypair;
+
 pub use hashable::*;
+pub use multisig::*;
 pub use ots::*;
 pub use vrf::*;

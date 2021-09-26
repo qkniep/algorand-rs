@@ -5,6 +5,7 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
 use data_encoding::BASE32_NOPAD;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512Trunc256};
 use thiserror::Error;
 
@@ -14,7 +15,7 @@ use crate::protocol;
 pub const HASH_LEN: usize = 32;
 
 /// Represents a 32-byte (256-bit) value holding a hash digest.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CryptoHash(pub [u8; HASH_LEN]);
 
 #[derive(Error, Debug)]
