@@ -6,7 +6,7 @@ mod generate;
 mod import;
 //mod multisig;
 //mod part;
-//mod sign;
+mod sign;
 
 use clap::{AppSettings, Clap};
 
@@ -15,7 +15,7 @@ use generate::GenerateCmd;
 use import::ImportCmd;
 //use multisig::MultisigCmd;
 //use part::PartCmd;
-//use sign::SignCmd;
+use sign::SignCmd;
 
 /// CLI for managing Algorand keys
 #[derive(Clap)]
@@ -36,7 +36,7 @@ enum SubCmd {
     Generate(GenerateCmd),
     Import(ImportCmd),
     Export(ExportCmd),
-    //Sign(SignCmd),
+    Sign(SignCmd),
     //Multisig(MultisigCmd),
     //Part(PartCmd),
 }
@@ -67,7 +67,7 @@ fn main() {
         SubCmd::Generate(c) => c.entrypoint(),
         SubCmd::Import(i) => i.entrypoint(),
         SubCmd::Export(e) => e.entrypoint(),
-        //SubCmd::Sign(s) => s.entrypoint(),
+        SubCmd::Sign(s) => s.entrypoint(),
         //SubCmd::Multisig(m) => m.entrypoint(),
         //SubCmd::Part(p) => p.entrypoint(),
     };
