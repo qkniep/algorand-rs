@@ -11,7 +11,7 @@ use algorsand::crypto::merklearray::*;
 
 pub fn merkle_root(c: &mut Criterion) {
     const ELEMENTS: usize = 100_000;
-    let a = (0..ELEMENTS)
+    let a: Vec<String> = (0..ELEMENTS)
         .into_iter()
         .map(|i| format!("test{}", i).to_owned())
         .collect();
@@ -26,7 +26,7 @@ pub fn merkle_root(c: &mut Criterion) {
 
 pub fn merkle_prove(c: &mut Criterion) {
     const ELEMENTS: usize = 1_000_000;
-    let a = (0..ELEMENTS)
+    let a: Vec<String> = (0..ELEMENTS)
         .into_iter()
         .map(|i| format!("test{}", i).to_owned())
         .collect();
@@ -42,7 +42,7 @@ pub fn merkle_prove(c: &mut Criterion) {
 
 pub fn merkle_verify(c: &mut Criterion) {
     const ELEMENTS: usize = 100_000;
-    let a = (0..ELEMENTS)
+    let a: Vec<String> = (0..ELEMENTS)
         .into_iter()
         .map(|i| format!("test{}", i).to_owned())
         .collect();
