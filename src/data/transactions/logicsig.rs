@@ -25,17 +25,15 @@ pub struct LogicSig {
 
 impl LogicSig {
     /// Returns true iff there is no content in this LogicSig.
-    pub fn blank(&self) -> bool {
-        self.logic.len() == 0
+    pub fn is_empty(&self) -> bool {
+        self.logic.is_empty()
     }
 
     /// Len returns the length of Logic plus the length of the Args
     /// This is limited by config.ConsensusParams.LogicSigMaxSize
     pub fn len(&self) -> usize {
-        let mut lsiglen = self.logic.len();
-        for arg in &self.args {
-            lsiglen += arg.len();
-        }
-        return lsiglen;
+        self.args
+            .iter()
+            .fold(self.logic.len(), |sum, arg| sum + arg.len())
     }
 }

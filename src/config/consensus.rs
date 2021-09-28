@@ -138,7 +138,7 @@ pub struct ConsensusParams {
     pub payset_commit: PaysetCommitType,
 
     /// Maximum time between timestamps on successive blocks.
-    pub max_timestamp_increment: i64,
+    pub max_timestamp_increment: u64,
 
     /// Support for the efficient encoding in `signed_tx_in_block`.
     pub support_signed_tx_in_block: bool,
@@ -384,7 +384,7 @@ lazy_static! {
     pub static ref CONSENSUS: ConsensusProtocols = {
         let mut cp = ConsensusProtocols::new();
         init_consensus_protocols(&mut cp);
-        load_configurable_consensus_protocols(".", &mut cp);
+        load_configurable_consensus_protocols(".", &mut cp).unwrap();
         for (_, p) in cp.0.iter_mut() {
             // TODO add again, once implemented
             //check_set_alloc_bounds(p);
@@ -506,7 +506,7 @@ pub fn save_configurable_consensus(data_dir: &str, params: ConsensusProtocols) -
         .mode(0o644)
         .open(consensus_protocol_path)?;
     serde_json::to_writer_pretty(f, &params)?;
-    return Ok(());
+    Ok(())
 }
 
 impl ConsensusProtocols {
@@ -523,7 +523,7 @@ impl ConsensusProtocols {
         let mut static_consensus = self.clone();
 
         for (version, params) in configurable_consensus.0 {
-            if params.approved_upgrades.len() == 0 {
+            if params.approved_upgrades.is_empty() {
                 // if we were provided with an empty ConsensusParams,
                 // delete the existing reference to this consensus version
                 for (ver, par) in &self.0 {
@@ -541,11 +541,11 @@ impl ConsensusProtocols {
                 }
             } else {
                 // need to add/update entry
-                //static_consensus.0[&version] = params;
+                static_consensus.0.insert(version, params);
             }
         }
 
-        return static_consensus;
+        static_consensus
     }
 }
 
@@ -583,7 +583,7 @@ pub fn load_configurable_consensus_protocols(
             //check_set_alloc_bounds(p);
         }
     }
-    return Ok(());
+    Ok(())
 }
 
 /// Loads the configurable protocols from the data directory and merges it with a copy of the Consensus map.
@@ -600,10 +600,7 @@ pub fn preload_configurable_consensus_protocols(
             io::ErrorKind::NotFound => Ok(consensus.clone()),
             _ => Err(e.into()),
         },
-        Ok(file) => {
-            let configurable_consensus = serde_json::from_reader(file)?;
-            return Ok(consensus.merge(configurable_consensus));
-        }
+        Ok(file) => Ok(consensus.merge(serde_json::from_reader(file)?)),
     }
 }
 
@@ -1074,9 +1071,9 @@ pub struct Global {
     pub big_lambda: std::time::Duration,
 }
 
-// Protocol holds the global configuration settings for the agreement protocol,
-// initialized with our current defaults. This is used across all nodes we create.
-static protocol: Global = Global {
+/// Holds the global configuration settings for the agreement protocol, initialized with our current defaults.
+/// This is used across all nodes we create.
+static PROTOCOL: Global = Global {
     small_lambda: std::time::Duration::from_millis(2000),
     big_lambda: std::time::Duration::from_secs(15),
 };

@@ -50,6 +50,6 @@ impl KeyregFields {
             }
         }
 
-        return Ok(());
+        Ok(())
     }
 }

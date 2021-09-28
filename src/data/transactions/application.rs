@@ -170,20 +170,16 @@ impl AppCallFields {
         account_idx: u64,
         sender: basics::Address,
     ) -> Result<basics::Address, ()> {
-        // Index 0 always corresponds to the sender
-        if account_idx == 0 {
-            return Ok(sender);
-        }
-
-        // An index > 0 corresponds to an offset into txn.accounts. Check to
-        // make sure the index is valid.
-        if account_idx > self.accounts.len() as u64 {
+        match account_idx {
+            // Index 0 always corresponds to the sender
+            0 => Ok(sender),
+            // An index > 0 corresponds to an offset into txn.accounts. Check to
+            // make sure the index is valid.
             //err := fmt.Errorf("invalid Account reference %d", accountIdx)
-            return Err(());
+            i if i > self.accounts.len() as u64 => Err(()),
+            // accountIdx must be in [1, len(self.accounts)]
+            i => Ok(self.accounts[i as usize - 1]),
         }
-
-        // accountIdx must be in [1, len(self.accounts)]
-        return Ok(self.accounts[account_idx as usize - 1].clone());
     }
 
     /// Converts an address into an integer offset into [txn.Sender, txn.Accounts[0], ...],
@@ -200,32 +196,27 @@ impl AppCallFields {
         }
 
         // Otherwise we index into self.accounts
-        if let Some(index) = self.accounts.iter().position(|a| *a == target) {
-            return Ok(index as u64 + 1);
+        match self.accounts.iter().position(|a| *a == target) {
+            Some(index) => Ok(index as u64 + 1),
+            //return Err(fmt.Errorf("invalid Account reference %s", target))
+            _ => Err(()),
         }
-
-        //return Err(fmt.Errorf("invalid Account reference %s", target))
-        return Err(());
     }
 
     /// Converts an integer index into an application id associated with the transaction.
     /// Index 0 corresponds to the current app, and an index > 0 corresponds to an offset into txn.ForeignApps.
     /// Returns an error if the index is not valid.
-    pub fn app_id_by_index(&self, i: u64) -> Result<basics::AppIndex, ()> {
-        // Index 0 always corresponds to the current app
-        if i == 0 {
-            return Ok(self.application_id);
-        }
-
-        // An index > 0 corresponds to an offset into txn.ForeignApps. Check to
-        // make sure the index is valid.
-        if i > self.foreign_apps.len() as u64 {
+    pub fn app_id_by_index(&self, index: u64) -> Result<basics::AppIndex, ()> {
+        match index {
+            // Index 0 always corresponds to the current app
+            0 => Ok(self.application_id),
+            // An index > 0 corresponds to an offset into tx.foreign_apps.
+            // Check to make sure the index is valid.
             //err := fmt.Errorf("invalid Foreign App reference %d", i)
-            return Err(());
+            i if i > self.foreign_apps.len() as u64 => Err(()),
+            // aidx must be in [1, len(self.foreign_apps)]
+            i => Ok(self.foreign_apps[i as usize - 1]),
         }
-
-        // aidx must be in [1, len(self.foreign_apps)]
-        return Ok(self.foreign_apps[i as usize - 1]);
     }
 
     /// Converts an application id into an integer offset into [current app, txn.ForeignApps[0], ...],
@@ -236,12 +227,12 @@ impl AppCallFields {
         if app_id == self.application_id {
             return Ok(0);
         }
-        // Otherwise we index into self.foreign_apps
-        if let Some(index) = self.foreign_apps.iter().position(|&id| id == app_id) {
-            return Ok(index as u64 + 1);
-        }
 
-        //return 0, fmt.Errorf("invalid Foreign App reference %d", appID)
-        return Err(());
+        // Otherwise we index into self.foreign_apps
+        match self.foreign_apps.iter().position(|&id| id == app_id) {
+            Some(index) => Ok(index as u64 + 1),
+            //return 0, fmt.Errorf("invalid Foreign App reference %d", appID)
+            _ => Err(()),
+        }
     }
 }

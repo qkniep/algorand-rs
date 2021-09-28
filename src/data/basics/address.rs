@@ -2,6 +2,7 @@
 // Distributed under terms of the MIT license.
 
 use std::fmt;
+use std::str::FromStr;
 
 use data_encoding::BASE32_NOPAD;
 use serde::{Deserialize, Serialize};
@@ -20,7 +21,7 @@ pub enum AddressError {
     InvalidChecksum,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Address(pub [u8; 32]);
 
 impl Address {
@@ -28,10 +29,46 @@ impl Address {
         Self(hash.0)
     }
 
+    /// Returns the checksum as Vec<u8>.
+    /// Checksum in Algorand are the last 4 bytes of the shortAddress Hash. H(Address)[28..]
+    fn checksum(&self) -> Vec<u8> {
+        //let short_addr_hash = crypto.Hash(self.0);
+        let short_addr_hash = Sha512Trunc256::digest(&self.0);
+        short_addr_hash[short_addr_hash.len() - CHECKSUM_LEN..].to_vec()
+    }
+
+    /// Returns the human-readable, checksummed version of the address
+    fn get_user_address(&self) -> String {
+        self.to_string()
+    }
+
+    /// Checks if an address is the zero value.
+    pub fn is_zero(&self) -> bool {
+        *self == Address([0; 32])
+    }
+}
+
+impl fmt::Display for Address {
+    /// Returns a string representation of Address
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut addr_with_checksum = [0u8; 32 + CHECKSUM_LEN];
+        addr_with_checksum[..32].copy_from_slice(&self.0[..]);
+        // calling addr.GetChecksum() here takes 20ns more than just rolling it out, so we'll just repeat that code.
+        // let short_addr_hash = crypto.Hash(self.0);
+        let short_addr_hash = Sha512Trunc256::digest(&self.0);
+        addr_with_checksum[32..]
+            .copy_from_slice(&short_addr_hash[short_addr_hash.len() - CHECKSUM_LEN..]);
+        f.write_str(&BASE32_NOPAD.encode(&addr_with_checksum))
+    }
+}
+
+impl FromStr for Address {
+    type Err = AddressError;
+
     /// Tries to unmarshal the checksummed address string.
     /// Algorand address strings (base32 encoded) have a postamble which serves as the checksum of the address.
     /// When converted to an Address object representation, that checksum is dropped (after validation).
-    pub fn from_str(addr: &str) -> Result<Self, AddressError> {
+    fn from_str(addr: &str) -> Result<Self, AddressError> {
         let decoded = match BASE32_NOPAD.decode(addr.as_bytes()) {
             Ok(d) => d,
             _ => {
@@ -58,39 +95,7 @@ impl Address {
             unreachable!();
         }
 
-        return Ok(short);
-    }
-
-    /// Returns the checksum as Vec<u8>.
-    /// Checksum in Algorand are the last 4 bytes of the shortAddress Hash. H(Address)[28..]
-    fn checksum(&self) -> Vec<u8> {
-        //let short_addr_hash = crypto.Hash(self.0);
-        let short_addr_hash = Sha512Trunc256::digest(&self.0);
-        return short_addr_hash[short_addr_hash.len() - CHECKSUM_LEN..].to_vec();
-    }
-
-    /// Returns the human-readable, checksummed version of the address
-    fn get_user_address(&self) -> String {
-        self.to_string()
-    }
-
-    /// Checks if an address is the zero value.
-    pub fn is_zero(&self) -> bool {
-        *self == Address([0; 32])
-    }
-}
-
-impl fmt::Display for Address {
-    /// Returns a string representation of Address
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut addr_with_checksum = [0u8; 32 + CHECKSUM_LEN];
-        addr_with_checksum[..32].copy_from_slice(&self.0[..]);
-        // calling addr.GetChecksum() here takes 20ns more than just rolling it out, so we'll just repeat that code.
-        // let short_addr_hash = crypto.Hash(self.0);
-        let short_addr_hash = Sha512Trunc256::digest(&self.0);
-        addr_with_checksum[32..]
-            .copy_from_slice(&short_addr_hash[short_addr_hash.len() - CHECKSUM_LEN..]);
-        return f.write_str(&BASE32_NOPAD.encode(&addr_with_checksum));
+        Ok(short)
     }
 }
 

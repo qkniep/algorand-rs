@@ -130,7 +130,7 @@ impl Tree {
         };
 
         let mut l = 0;
-        while s.hints.len() > 0 || pl.0.len() > 1 {
+        while !s.hints.is_empty() || pl.0.len() > 1 {
             pl = pl.up(&mut s, l as u64, true)?;
             l += 1;
 
@@ -146,7 +146,7 @@ impl Tree {
             return Err(());
         }
 
-        return Ok(());
+        Ok(())
     }
 
     fn top_layer(&self) -> &Layer {

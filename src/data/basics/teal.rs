@@ -11,7 +11,7 @@ use crate::config;
 use crate::data::basics::MicroAlgos;
 
 /// Actions that may be performed when applying a delta to a TEAL key/value store.
-#[derive(PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeltaAction {
     /// Indicates that a TEAL byte slice should be stored at a key.
     SetBytes,
@@ -24,7 +24,7 @@ pub enum DeltaAction {
 }
 
 /// Links a DeltaAction with a value to be set.
-#[derive(PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValueDelta {
     pub action: DeltaAction,
     pub bytes: Vec<u8>,
@@ -44,7 +44,7 @@ impl ValueDelta {
 
 /// Map from key/value store keys to ValueDeltas, indicating what should happen for that key.
 //msgp:allocbound StateDelta config.MaxStateDeltaKeys
-#[derive(Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StateDelta(HashMap<String, ValueDelta>);
 
 /*
@@ -77,7 +77,7 @@ impl StateDelta {
     /// Checks whether the keys and values in a StateDelta conform to the consensus parameters' maximum lengths.
     // TODO return Result<(), X> instead  of bool?
     pub fn is_valid(&self, proto: config::ConsensusParams) -> bool {
-        if self.0.len() > 0 && proto.max_app_key_len == 0 {
+        if !self.0.is_empty() && proto.max_app_key_len == 0 {
             //return fmt.Errorf("delta not empty, but proto.MaxAppKeyLen is 0 (why did we make a delta?)")
             return false;
         }
@@ -101,7 +101,7 @@ impl StateDelta {
                 DeltaAction::Delete => {}
             }
         }
-        return true;
+        true
     }
 }
 
@@ -131,10 +131,8 @@ impl StateSchema {
 
     /// Counts the total number of values that may be stored for particular schema.
     pub fn num_entries(&self) -> u64 {
-        let mut tot = 0u64;
-        tot = tot.saturating_add(self.num_uint);
-        tot = tot.saturating_add(self.num_byte_slice);
-        return tot;
+        0u64.saturating_add(self.num_uint)
+            .saturating_add(self.num_byte_slice)
     }
 
     /// Computes the min balance requirements for a StateSchema based on the consensus parameters.
@@ -158,7 +156,7 @@ impl StateSchema {
         min = min.saturating_add(uint_cost);
         min = min.saturating_add(bytes_cost);
 
-        return MicroAlgos(min);
+        MicroAlgos(min)
     }
 }
 
@@ -175,8 +173,8 @@ pub enum TealType {
 impl fmt::Display for TealType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TealType::Bytes => write!(f, "{}", "b"),
-            TealType::Uint => write!(f, "{}", "u"),
+            TealType::Bytes => write!(f, "b"),
+            TealType::Uint => write!(f, "u"),
         }
     }
 }
@@ -226,10 +224,10 @@ impl TealValue {
 
 impl fmt::Display for TealValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.teal_type == TealType::Bytes {
-            return write!(f, "{}", HEXLOWER.encode(&self.bytes));
+        match self.teal_type {
+            TealType::Bytes => write!(f, "{}", HEXLOWER.encode(&self.bytes)),
+            _ => write!(f, "{}", self.uint),
         }
-        return write!(f, "{}", self.uint);
     }
 }
 
@@ -242,12 +240,12 @@ impl TealKeyValue {
     /// Calculates the number of each value type in a TealKeyValue and represents the result as a StateSchema.
     pub fn to_state_schema(&self) -> StateSchema {
         let mut schema = StateSchema::default();
-        for (_, value) in &self.0 {
+        for value in self.0.values() {
             match value.teal_type {
                 TealType::Bytes => schema.num_byte_slice += 1,
                 TealType::Uint => schema.num_uint += 1,
             }
         }
-        return schema;
+        schema
     }
 }

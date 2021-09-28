@@ -11,9 +11,9 @@ use crate::protocol;
 
 #[test]
 fn estimate_encoded_size() {
-    let addr =
-        basics::Address::from_str("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
-            .unwrap();
+    let addr = "NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA"
+        .parse::<basics::Address>()
+        .unwrap();
 
     let mut rng = thread_rng();
     let mut buf = [0; 10];
@@ -22,7 +22,7 @@ fn estimate_encoded_size() {
     let proto = &config::CONSENSUS.0[&protocol::CURRENT_CONSENSUS_VERSION];
     let tx = Transaction::Payment(
         Header {
-            sender: addr.clone(),
+            sender: addr,
             fee: basics::MicroAlgos(100),
             first_valid: basics::Round(1000),
             last_valid: basics::Round(1000 + proto.max_tx_life),
@@ -46,9 +46,9 @@ fn estimate_encoded_size() {
 #[test]
 fn go_online_go_nonparticipating_contradiction() {
     // addr has no significance here other than being a normal valid address
-    let addr =
-        basics::Address::from_str("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
-            .unwrap();
+    let addr = "NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA"
+        .parse()
+        .unwrap();
 
     let mut tx = generate_dummy_go_nonparticpating_tx(addr);
     // Generate keys, they don't need to be good or secure, just present.
@@ -90,9 +90,9 @@ fn go_online_go_nonparticipating_contradiction() {
 #[test]
 fn go_nonparticipating_well_formed() {
     // addr has no significance here other than being a normal valid address
-    let addr =
-        basics::Address::from_str("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
-            .unwrap();
+    let addr = "NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA"
+        .parse()
+        .unwrap();
 
     let tx = generate_dummy_go_nonparticpating_tx(addr);
     let mut cur_proto = config::CONSENSUS.0[&protocol::CURRENT_CONSENSUS_VERSION].clone();
@@ -150,14 +150,14 @@ fn app_call_create_well_formed() {
     };
     let cur_proto = &config::CONSENSUS.0[&protocol::CURRENT_CONSENSUS_VERSION];
     let future_proto = &config::CONSENSUS.0[&protocol::ConsensusVersion::Future];
-    let addr1 =
-        basics::Address::from_str("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
-            .unwrap();
+    let addr1 = "NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA"
+        .parse()
+        .unwrap();
     let usecases = vec![
         TestCase {
             tx: Transaction::AppCall(
                 Header {
-                    sender: addr1.clone(),
+                    sender: addr1,
                     fee: basics::MicroAlgos(1000),
                     first_valid: basics::Round(100),
                     last_valid: basics::Round(105),
@@ -176,7 +176,7 @@ fn app_call_create_well_formed() {
         TestCase {
             tx: Transaction::AppCall(
                 Header {
-                    sender: addr1.clone(),
+                    sender: addr1,
                     fee: basics::MicroAlgos(1000),
                     first_valid: basics::Round(100),
                     last_valid: basics::Round(105),
@@ -195,7 +195,7 @@ fn app_call_create_well_formed() {
         TestCase {
             tx: Transaction::AppCall(
                 Header {
-                    sender: addr1.clone(),
+                    sender: addr1,
                     fee: basics::MicroAlgos(1000),
                     first_valid: basics::Round(100),
                     last_valid: basics::Round(105),
@@ -215,7 +215,7 @@ fn app_call_create_well_formed() {
         TestCase {
             tx: Transaction::AppCall(
                 Header {
-                    sender: addr1.clone(),
+                    sender: addr1,
                     fee: basics::MicroAlgos(1000),
                     first_valid: basics::Round(100),
                     last_valid: basics::Round(105),

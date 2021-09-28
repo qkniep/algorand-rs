@@ -52,18 +52,17 @@ pub fn key_to_mnemonic(key: [u8; KEY_LEN_BYTES]) -> Vec<String> {
 
     let chk = checksum(&key);
     mnemonic.push(WORDS[chk as usize].clone());
-
-    return mnemonic;
+    mnemonic
 }
 
 /// Converts a mnemonic phrase (whitespace separated string of words) into a key.
 pub fn phrase_to_key(phrase: &str) -> Result<[u8; KEY_LEN_BYTES], MnemonicError> {
-    let words = phrase
+    let words: Vec<String> = phrase
         .split_whitespace()
         .into_iter()
         .map(|s| s.to_owned())
         .collect();
-    return mnemonic_to_key(&words);
+    mnemonic_to_key(&words)
 }
 
 /// Converts a mnemonic word list into a key.
@@ -71,7 +70,7 @@ pub fn phrase_to_key(phrase: &str) -> Result<[u8; KEY_LEN_BYTES], MnemonicError>
 ///   - has wrong length, or
 ///   - has an invalid checksum, or
 ///   - contains a word not from the word list
-pub fn mnemonic_to_key(mnemonic: &Vec<String>) -> Result<[u8; KEY_LEN_BYTES], MnemonicError> {
+pub fn mnemonic_to_key(mnemonic: &[String]) -> Result<[u8; KEY_LEN_BYTES], MnemonicError> {
     if mnemonic.len() != MNEMONIC_LEN_WORDS {
         return Err(MnemonicError::WrongMnemonicLen(mnemonic.len()));
     }
@@ -109,10 +108,10 @@ pub fn mnemonic_to_key(mnemonic: &Vec<String>) -> Result<[u8; KEY_LEN_BYTES], Mn
     let bytes: [u8; KEY_LEN_BYTES] = bytes.as_slice().try_into().unwrap();
 
     if checksum(&bytes) != base11[base11.len() - 1] {
-        return Err(MnemonicError::WrongChecksum);
+        Err(MnemonicError::WrongChecksum)
+    } else {
+        Ok(bytes)
     }
-
-    return Ok(bytes);
 }
 
 fn load_mnemonic_file() -> Vec<String> {
@@ -133,12 +132,12 @@ fn load_mnemonic_file() -> Vec<String> {
         );
     }
 
-    return wordlist;
+    wordlist
 }
 
 fn checksum(data: &[u8]) -> u32 {
     let hash = Sha512Trunc256::digest(data);
-    return to_base11(&hash[0..2])[0];
+    to_base11(&hash[0..2])[0]
 }
 
 /// base 8 (u8) -> base 11 (u32)
@@ -162,7 +161,7 @@ fn to_base11(base8_data: &[u8]) -> Vec<u32> {
         out.push(buf & 0x7ff);
     }
 
-    return out;
+    out
 }
 
 /// base 11 (u32) -> base 8 (u8)
@@ -187,7 +186,7 @@ fn to_base8(base11_data: &[u32]) -> Vec<u8> {
         out.push(buf as u8);
     }
 
-    return out;
+    out
 }
 
 #[cfg(test)]
@@ -229,7 +228,7 @@ mod tests {
         const BAD_LENGTHS: [usize; 4] = [0, MNEMONIC_LEN_WORDS - 1, MNEMONIC_LEN_WORDS + 1, 1000];
 
         for len in BAD_LENGTHS {
-            let mnemonic = std::iter::repeat("abandon".to_owned()).take(len).collect();
+            let mnemonic: Vec<String> = std::iter::repeat("abandon".to_owned()).take(len).collect();
             assert_eq!(
                 mnemonic_to_key(&mnemonic),
                 Err(MnemonicError::WrongMnemonicLen(len))

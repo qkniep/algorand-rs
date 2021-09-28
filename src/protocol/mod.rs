@@ -17,7 +17,7 @@ pub use txtype::*;
 
 pub type NetworkID = &'static str;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CompactCertType {
     /// Initial compact cert setup, using Ed25519 ephemeral-key signatures and SHA512/256 hashes.
     Basic,

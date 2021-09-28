@@ -11,7 +11,7 @@ use crate::data::basics;
 /// EvalDelta stores StateDeltas for an application's global key/value store, as
 /// well as StateDeltas for some number of accounts holding local state for that
 /// application
-#[derive(Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvalDelta {
     pub global_delta: basics::StateDelta,
 

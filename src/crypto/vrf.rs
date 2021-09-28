@@ -43,7 +43,7 @@ pub enum VrfError {
     Unknown,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VrfKeypair {
     private: [u8; 32],
     public: VrfPublicKey,
@@ -81,18 +81,18 @@ impl VrfKeypair {
 
         // Step 4: Gamma = x*H
         let xsk: ExpandedSecretKey = (&SecretKey::from_bytes(&self.private).unwrap()).into();
-        let x = Scalar::from_bits(xsk.to_bytes()[..32].try_into().unwrap());
-        let gamma = x * hash_point;
+        let secret_scalar_x = Scalar::from_bits(xsk.to_bytes()[..32].try_into().unwrap());
+        let gamma = secret_scalar_x * hash_point;
 
         // Step 5: k = ECVRF_nonce_generation(SK, h_string)
         let k = gen_nonce(&self.private, &h_str);
 
         // Step 6: c = ECVRF_hash_points(H, Gamma, k*B, k*H)
         let b = constants::ED25519_BASEPOINT_POINT;
-        let c = hash_points(hash_point, gamma, k * b, k * hash_point);
+        let c = hash_points(vec![hash_point, gamma, k * b, k * hash_point]);
 
         // Step 7: s = (k + c*x) mod q
-        let s = k + c * x;
+        let s = k + c * secret_scalar_x;
 
         // Step 8: pi_string = point_to_string(Gamma) || int_to_string(c, n) || int_to_string(s, qLen)
         let gamma_str = &gamma.compress().to_bytes()[..];
@@ -100,8 +100,7 @@ impl VrfKeypair {
         let pi_fixed: [u8; 80] = pi.as_slice().try_into().unwrap();
 
         // Step 9: Output pi_string.
-        let proof = VrfProof(pi_fixed);
-        return Ok(proof);
+        Ok(VrfProof(pi_fixed))
     }
 
     /// Gets a copy of the public key.
@@ -114,22 +113,22 @@ impl VrfPublicKey {
     /// Validates a proof for a given message against this public key, as specified in:
     /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03 (section 5.3).
     pub fn verify_bytes(&self, proof: VrfProof, bytes: &[u8]) -> Result<VrfOutput, VrfError> {
-        let d = proof.decode();
-        if d.is_none() {
+        let decoded = proof.decode();
+        if decoded.is_none() {
             return Err(VrfError::InvalidProof);
         }
 
-        let (gamma, c, s) = d.unwrap();
-        let h = hash_to_curve(self, bytes)?;
+        let (gamma, c, s) = decoded.unwrap();
+        let hash_point = hash_to_curve(self, bytes)?;
 
         let u = s * constants::ED25519_BASEPOINT_POINT - c * self.to_point();
-        let v = s * h - c * gamma;
-        let c_calculated = hash_points(h, gamma, u, v);
+        let v = s * hash_point - c * gamma;
+        let c_calculated = hash_points(vec![hash_point, gamma, u, v]);
 
         if c_calculated == c {
-            return Ok(proof.to_output());
+            Ok(proof.to_output())
         } else {
-            return Err(VrfError::InvalidProof);
+            Err(VrfError::InvalidProof)
         }
     }
 
@@ -154,7 +153,7 @@ impl VrfProof {
         let c = Scalar::from_canonical_bytes(c_str)?;
         let s_str = self.0[48..80].try_into().unwrap();
         let s = Scalar::from_canonical_bytes(s_str)?;
-        return Some((gamma, c, s));
+        Some((gamma, c, s))
     }
 
     ///
@@ -164,7 +163,7 @@ impl VrfProof {
         let cg = Scalar::from(COFACTOR) * gamma;
         let s = [&SUITE_STRING, &[0x03], &cg.compress().as_bytes()[..]].concat();
         let beta = Sha512::digest(&s).as_slice().try_into().unwrap();
-        return VrfOutput(beta);
+        VrfOutput(beta)
     }
 }
 
@@ -188,7 +187,7 @@ impl Digest for TruncHasher {
     }
 
     fn update(&mut self, data: impl AsRef<[u8]>) {
-        self.0.extend_from_slice(&data.as_ref());
+        self.0.extend_from_slice(data.as_ref());
     }
 
     fn finalize(self) -> GenericArray<u8, Self::OutputSize> {
@@ -232,21 +231,22 @@ fn gen_nonce(sk: &[u8; 32], data: &[u8]) -> Scalar {
     let trunc_h: [u8; 32] = h[32..].try_into().unwrap();
     let k_ga = Sha512::digest(&[&trunc_h, data].concat());
     let k = k_ga.as_slice().try_into().unwrap();
-    return Scalar::from_bytes_mod_order_wide(k);
+    Scalar::from_bytes_mod_order_wide(k)
 }
 
 /// Hash points into a scalar, as specified in:
 /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03 (section 5.4.3).
-fn hash_points(a: EdwardsPoint, b: EdwardsPoint, c: EdwardsPoint, d: EdwardsPoint) -> Scalar {
-    let a_str = &a.compress().to_bytes()[..];
-    let b_str = &b.compress().to_bytes()[..];
-    let c_str = &c.compress().to_bytes()[..];
-    let d_str = &d.compress().to_bytes()[..];
-    let s = [&SUITE_STRING, &[0x02], a_str, b_str, c_str, d_str].concat();
+fn hash_points(points: Vec<EdwardsPoint>) -> Scalar {
+    let points_str: Vec<u8> = points
+        .iter()
+        .map(|p| p.compress().to_bytes())
+        .flatten()
+        .collect();
+    let s = [&SUITE_STRING, &[0x02], points_str.as_slice()].concat();
     let h = Sha512::digest(&s);
     let mut out_bytes = [0; 32];
     out_bytes[..16].copy_from_slice(&h[..16]);
-    return Scalar::from_bytes_mod_order(out_bytes);
+    Scalar::from_bytes_mod_order(out_bytes)
 }
 
 #[cfg(test)]

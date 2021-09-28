@@ -2,6 +2,7 @@
 // Distributed under terms of the MIT license.
 
 use std::fmt;
+use std::ops::Add;
 
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +17,10 @@ pub type RoundInterval = u64;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct MicroAlgos(pub u64);
 
+/// A protocol round index.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Round(pub u64);
+
 impl MicroAlgos {
     pub fn is_zero(&self) -> bool {
         self.0 == 0
@@ -28,7 +33,7 @@ impl MicroAlgos {
     /// The number of reward units in some number of algos.
     // TODO better doc comment
     pub fn reward_units(&self, proto: config::ConsensusParams) -> u64 {
-        return self.0 / proto.reward_unit;
+        self.0 / proto.reward_unit
     }
 
     // We generate our own encoders and decoders for MicroAlgos
@@ -45,9 +50,13 @@ impl fmt::Display for MicroAlgos {
     }
 }
 
-/// A protocol round index.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Round(pub u64);
+impl Add for MicroAlgos {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self(self.0 + other.0)
+    }
+}
 
 impl fmt::Display for Round {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -58,11 +67,11 @@ impl fmt::Display for Round {
 impl Round {
     /// Maps a round to the identifier for which ephemeral key should be used for that round.
     /// key_dilution specifies the number of keys in the bottom-level of the two-level key structure.
-    fn ots_id(&self, key_dilution: u64) -> crypto::ots::OTSIdentifier {
-        return crypto::ots::OTSIdentifier {
+    pub fn ots_id(&self, key_dilution: u64) -> crypto::OTSIdentifier {
+        crypto::OTSIdentifier {
             batch: self.0 / key_dilution,
             offset: self.0 % key_dilution,
-        };
+        }
     }
 
     /// Subtracts r rounds.
@@ -77,6 +86,14 @@ impl Round {
     /// Rounds up round number to the next multiple of r.
     fn round_up_to_multiple_of(&self, r: Self) -> Self {
         Self((self.0 + r.0 - 1) / r.0 * r.0)
+    }
+}
+
+impl Add for Round {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self(self.0 + other.0)
     }
 }
 

@@ -1,15 +1,20 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
-use rmp_serde::{Deserializer, Serializer};
+use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
 
 pub fn encode(x: &impl Serialize) -> Vec<u8> {
     let mut enc = Vec::new();
     x.serialize(&mut Serializer::new(&mut enc)).unwrap();
-    return enc;
+    enc
 }
 
+pub fn decode<'a, T: Deserialize<'a>>(bytes: &'a [u8]) -> Result<T, rmp_serde::decode::Error> {
+    rmp_serde::decode::from_slice::<T>(bytes)
+}
+
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -33,3 +38,4 @@ mod tests {
         assert_eq!(enc.len(), 1);
     }
 }
+*/

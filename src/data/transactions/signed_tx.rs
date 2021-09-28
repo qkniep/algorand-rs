@@ -21,7 +21,7 @@ pub struct SignedTx {
 }
 
 /// How a signed transaction is encoded in a block.
-#[derive(PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignedTxInBlock {
     pub tx: SignedTxWithAD,
 
@@ -30,7 +30,7 @@ pub struct SignedTxInBlock {
 }
 
 /// A (decoded) SignedTx with associated ApplyData.
-#[derive(PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignedTxWithAD {
     pub tx: SignedTx,
     pub ad: ApplyData,
@@ -44,8 +44,7 @@ impl SignedTx {
 
     /// Returns the length in bytes of the encoded transaction
     pub fn get_encoded_length(&self) -> usize {
-        let enc = protocol::encode(self);
-        return enc.len();
+        protocol::encode(self).len()
     }
 
     /// Returns the address against which the signature/msig/lsig should be checked, or so the SignedTx claims.
@@ -53,17 +52,17 @@ impl SignedTx {
     /// It's provided as a convenience method.
     pub fn authorizer(&self) -> basics::Address {
         if self.auth_addr.is_zero() {
-            return self.tx.header().sender.clone();
+            self.tx.header().sender
+        } else {
+            self.auth_addr
         }
-        return self.auth_addr.clone();
     }
 }
 
 impl SignedTxInBlock {
     /// Returns the length in bytes of the encoded transaction.
     pub fn get_encoded_length(&self) -> usize {
-        let enc = protocol::encode(self);
-        return enc.len();
+        protocol::encode(self).len()
     }
 }
 
@@ -76,19 +75,18 @@ impl Hashable for SignedTxInBlock {
 
 /// Takes an array SignedTx and returns the same as SignedTxnWithAD.
 /// Each TXs ApplyData is the default empty state.
-pub fn WrapSignedTxnsWithAD(tx_group: Vec<SignedTx>) -> Vec<SignedTxWithAD> {
-    let mut tx_group_ad = Vec::new();
-    for (i, tx) in tx_group.iter().enumerate() {
-        tx_group_ad.push(SignedTxWithAD {
+pub fn wrap_signed_txs_with_ad(tx_group: &[SignedTx]) -> Vec<SignedTxWithAD> {
+    tx_group
+        .iter()
+        .map(|tx| SignedTxWithAD {
             tx: tx.clone(),
             ad: Default::default(),
-        });
-    }
-    return tx_group_ad;
+        })
+        .collect()
 }
 
 /// Computes the amount of fee credit that can be spent on inner TXs because it was more than required.
-pub fn fee_credit(tx_group: Vec<SignedTx>, min_fee: u64) -> Result<u64, ()> {
+pub fn fee_credit(tx_group: &[SignedTx], min_fee: u64) -> Result<u64, ()> {
     let mut min_fee_count = 0;
     let mut fees_paid = 0u64;
     for stxn in tx_group {
@@ -97,20 +95,21 @@ pub fn fee_credit(tx_group: Vec<SignedTx>, min_fee: u64) -> Result<u64, ()> {
         }
         fees_paid = fees_paid.saturating_add(stxn.tx.header().fee.0);
     }
-    let fee_needed = min_fee.checked_mul(min_fee_count);
-    if fee_needed.is_none() {
+    match min_fee.checked_mul(min_fee_count) {
         //return 0, fmt.Errorf("txgroup fee requirement overflow")
-        return Err(());
+        None => Err(()),
+        Some(fees_needed) => {
+            if fees_paid < fees_needed {
+                // fees_paid may have saturated; that's ok.
+                // Since we know fee_needed did not overflow, simple comparison tells us fees_paid was enough.
+                //return 0, fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d", fees_paid, min_fee_count, min_fee)
+                Err(())
+            } else {
+                // Now, if fees_paid *did* saturate, you will not get "credit" for
+                // all those fees while executing AVM code that might create transactions.
+                // But you'll get the max u64 - good luck spending it.
+                Ok(fees_paid - fees_needed)
+            }
+        }
     }
-    // fees_paid may have saturated; that's ok.
-    // Since we know fee_needed did not overflow, simple comparison tells us fees_paid was enough.
-    if fees_paid < fee_needed.unwrap() {
-        //return 0, fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d", fees_paid, min_fee_count, min_fee)
-        return Err(());
-    }
-    // Now, if feesPaid *did* saturate, you will not get "credit" for
-    // all those fees while executing AVM code that might create
-    // transactions.  But you'll get the max uint64 - good luck
-    // spending it.
-    return Ok(fees_paid - fee_needed.unwrap());
 }

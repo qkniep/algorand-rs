@@ -27,8 +27,7 @@ impl TryFrom<&str> for TxID {
     type Error = HashError;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
-        let h = CryptoHash::try_from(s)?;
-        return Ok(TxID(h));
+        Ok(TxID(CryptoHash::try_from(s)?))
     }
 }
 
@@ -85,7 +84,7 @@ impl Hashable for Transaction {
 }
 
 /// Contains information about the transaction's execution.
-#[derive(Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplyData {
     /// Closing amount for transaction.
     pub closing_amount: basics::MicroAlgos,
@@ -138,7 +137,7 @@ impl Header {
         // Check genesis ID
         let proto = tc.consensus_protocol();
         let genesis_id = tc.genesis_id();
-        if self.genesis_id != "" && self.genesis_id != genesis_id {
+        if !self.genesis_id.is_empty() && self.genesis_id != genesis_id {
             return Err(InvalidTx::GenesisIdMismatch(
                 self.genesis_id.clone(),
                 genesis_id,
@@ -161,7 +160,7 @@ impl Header {
             return Err(InvalidTx::GenesisHashNotAllowed);
         }
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -170,7 +169,7 @@ impl Transaction {
     pub fn id(&self) -> TxID {
         // TODO include protocol::TRANSACTION
         let enc = protocol::encode(self);
-        return TxID(hash(&enc));
+        TxID(hash(&enc))
     }
 
     /// Signs this transaction using a given account's secrets.
@@ -189,7 +188,7 @@ impl Transaction {
             s.auth_addr = basics::Address(kp.public.to_bytes());
         }
 
-        return s;
+        s
     }
 
     pub fn header(&self) -> &Header {
@@ -264,11 +263,11 @@ impl Transaction {
                 // Programs may only be set for creation or update.
                 if fields.application_id != basics::AppIndex(0)
                     && fields.on_completion != OnCompletion::UpdateApplicationOC
+                    && (!fields.approval_program.is_empty()
+                        || !fields.clear_state_program.is_empty())
                 {
-                    if fields.approval_program.len() != 0 || fields.clear_state_program.len() != 0 {
-                        //return fmt.Errorf( "programs may only be specified during application creation or update",);
-                        return Err(InvalidTx::Unknown);
-                    }
+                    //return fmt.Errorf( "programs may only be specified during application creation or update",);
+                    return Err(InvalidTx::Unknown);
                 }
 
                 let mut effective_epp = fields.extra_program_pages;
@@ -378,7 +377,7 @@ impl Transaction {
                 } else if !header.fee.is_zero() {
                     //return fmt.Errorf("fee must be zero");
                     return Err(InvalidTx::Unknown);
-                } else if header.note.len() != 0 {
+                } else if !header.note.is_empty() {
                     //return fmt.Errorf("note must be empty");
                     return Err(InvalidTx::Unknown);
                 } else if !header.group.is_zero() {
@@ -503,28 +502,28 @@ impl Transaction {
     /// Returns the addresses whose balance records this transaction will need to access.
     /// The header's default is to return just the sender and the fee sink.
     fn relevant_addrs(&self, spec: SpecialAddresses) -> Vec<basics::Address> {
-        let mut addrs = vec![self.header().sender.clone(), spec.fee_sink];
+        let mut addrs = vec![self.header().sender, spec.fee_sink];
 
         match self {
             Self::Payment(_, fields) => {
-                addrs.push(fields.receiver.clone());
-                if let Some(close_to) = fields.close_remainder_to.as_ref() {
-                    addrs.push(close_to.clone());
+                addrs.push(fields.receiver);
+                if let Some(close_to) = fields.close_remainder_to {
+                    addrs.push(close_to);
                 }
             }
             Self::AssetTransfer(_, fields) => {
-                addrs.push(fields.asset_receiver.clone());
+                addrs.push(fields.asset_receiver);
                 if !fields.asset_close_to.is_zero() {
-                    addrs.push(fields.asset_close_to.clone());
+                    addrs.push(fields.asset_close_to);
                 }
                 if !fields.asset_sender.is_zero() {
-                    addrs.push(fields.asset_sender.clone());
+                    addrs.push(fields.asset_sender);
                 }
             }
             _ => {}
         };
 
-        return addrs;
+        addrs
     }
 
     /// Returns the amount paid to the recipient in this payment.
@@ -538,8 +537,8 @@ impl Transaction {
     /// Returns the address of the receiver. If the transaction has no receiver, it returns the empty address.
     fn get_receiver_rddress(&self) -> Option<basics::Address> {
         match self {
-            Self::Payment(_, fields) => Some(fields.receiver.clone()),
-            Self::AssetTransfer(_, fields) => Some(fields.asset_receiver.clone()),
+            Self::Payment(_, fields) => Some(fields.receiver),
+            Self::AssetTransfer(_, fields) => Some(fields.asset_receiver),
             _ => None,
         }
     }
@@ -556,7 +555,7 @@ impl Transaction {
             sig: crypto::Signature::new([1; crypto::SIGNATURE_LENGTH]),
         };
         return stx.get_encoded_length();*/
-        return 0;
+        200
     }
 }
 

@@ -2,13 +2,18 @@
 // Distributed under terms of the MIT license.
 
 //! Implementation of a two-layer OTS scheme based on ECDSA-ED25519.
+//!
+//! A One Time Signature (OTS) is a cryptographic signature that is produced
+//! a limited number of times and provides forward integrity.
 
+use std::collections::VecDeque;
 use std::convert::TryInto;
 use std::sync::RwLock;
 
 use ed25519_dalek::{Keypair, PublicKey, Signature, Signer};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
 
 use super::*;
 use crate::protocol;
@@ -17,12 +22,8 @@ use crate::protocol;
 // TODO ensure codecs are compatible with go-algorand
 //      (where necessary)
 
-/// A One Time Signature (OTS) is a cryptographic signature that is produced
-/// a limited number of times and provides forward integrity.
-///
-/// Specifically, an OTS is generated from an ephemeral secret.
-/// After some number of messages is signed under a given OTSIdentifier
-/// the corresponding secret is deleted.
+/// An OTS is generated from an ephemeral secret.
+/// After some number of messages is signed under a given `OTSIdentifier` the corresponding secret is deleted.
 /// This prevents the secret-holder from signing a contradictory message in the
 /// future in the event of a secret-key compromise.
 #[derive(Serialize, Deserialize)]
@@ -37,28 +38,29 @@ pub struct OTS {
     /// This means we can't delete the field without breaking catchup.
     _pk_sig_old: Signature,
 
-    // Used to verify a new-style two-level ephemeral signature.
-    // PK1Sig is a signature of OneTimeSignatureSubkeyOffsetID(PK, Batch, Offset) under the key PK2.
-    // PK2Sig is a signature of OneTimeSignatureSubkeyBatchID(PK2, Batch) under the master key (OneTimeSignatureVerifier).
+    /// Used to verify a new-style two-level ephemeral signature.
     pub pk2: PublicKey,
+
+    /// Signature of `OTSSubkeyOffsetID(pk, batch, offset)` under the key `pk2`.
     pub pk1_sig: Signature,
+
+    /// Signature of `OTSSubkeyBatchID(pk2, batch)` under the master key (`OTSVerifier`).
     pub pk2_sig: Signature,
 }
 
-/// An identifier under which an OTS is produced on a given message.
-/// This identifier is represented using a two-level structure,
-/// which corresponds to two levels of our ephemeral key tree.
-#[derive(Clone, Copy, Serialize, Deserialize)]
+/// An identifier under which OTSs are produced.
+/// This identifier is represented using a two-level structure, which corresponds to our ephemeral key tree.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct OTSIdentifier {
     /// Most-significant part of the identifier.
     pub batch: u64,
 
     /// Least-significant part of the identifier.
-    /// When moving to a new Batch, the Offset values restart from 0.
+    /// When moving to a new `batch`, the `offset` values restart from 0.
     pub offset: u64,
 }
 
-/// Identifies an EphemeralSubkey of a batch for the purposes of signing it with the top-level master key.
+/// Identifies an `EphemeralSubkey` of a `batch` for the purposes of signing it with the top-level master key.
 #[derive(Serialize, Deserialize)]
 pub struct OTSSubkeyBatchID {
     pub sub_key_pk: PublicKey,
@@ -80,31 +82,30 @@ pub type OTSVerifier = PublicKey;
 ///
 /// When the method `OTSSecrets::delete_before(id)` is called,
 /// ephemeral secrets corresponding to `OTSIdentifier`s preceding ID are deleted.
-/// Thereafter, an entity can no longer sign different messages with old `OTSIdentifier`s,
-/// protecting the integrity of the messages signed under those identifiers.
+/// Thereafter, no different messages can be signed with old `OTSIdentifier`s,
+/// permanently protecting the integrity of the messages signed under those identifiers.
 #[derive(Serialize, Deserialize)]
-// TODO use VecDeque instead of Vec for batches and offsets to facilitate deletions
 pub struct OTSSecrets {
     pub verifier: OTSVerifier,
 
     /// First batch whose subkey appears in Batches.
     first_batch: u64,
-    batches: Vec<EphemeralSubkey>,
+    batches: VecDeque<EphemeralSubkey>,
 
     /// First offset whose subkey appears in offsets.
     /// These subkeys correspond to batch first_batch-1.
     first_offset: u64,
-    offsets: Vec<EphemeralSubkey>,
+    offsets: VecDeque<EphemeralSubkey>,
 
-    // When offsets is non-empty, `offsets_pk2` is the intermediate-level public
-    // key that can be used to verify signatures on the subkeys in offsets, and
-    // `offsets_pk2_sig` is the signature from the master key (OTSVerifier)
-    // on `OTSSubkeyBatchID(offsets_pk2, first_batch-1)`.
+    /// When offsets is non-empty, `offsets_pk2` is the intermediate-level public
+    /// key that can be used to verify signatures on the subkeys in offsets.
     offsets_pk2: PublicKey,
+
+    /// Signature from the master key (`OTSVerifier`) on `OTSSubkeyBatchID(offsets_pk2, first_batch-1)`.
     offsets_pk2_sig: Signature,
 
     /// Read-write lock to guard against concurrent invocations,
-    /// such as sign() concurrently running with delete_before*().
+    /// such as sign() concurrently running with delete_before().
     lock: RwLock<()>,
 }
 
@@ -113,7 +114,7 @@ impl OTSSecrets {
     /// [start_batch, start_batch+num_batches), i.e. including start_batch and excludes start_batch+num_batches.
     pub fn generate(start_batch: u64, num_batches: u64) -> OTSSecrets {
         let kp = Keypair::generate(&mut OsRng {});
-        let mut subkeys = Vec::with_capacity(num_batches.try_into().unwrap());
+        let mut subkeys = VecDeque::with_capacity(num_batches.try_into().unwrap());
 
         for i in 0..num_batches {
             let kp_eph = Keypair::generate(&mut OsRng {});
@@ -125,23 +126,23 @@ impl OTSSecrets {
             };
             let newsig = kp.sign(&newid.hash_rep());
 
-            subkeys.push(EphemeralSubkey {
+            subkeys.push_back(EphemeralSubkey {
                 kp: kp_eph,
                 pk_sig_new: newsig,
             });
         }
 
-        return OTSSecrets {
+        OTSSecrets {
             verifier: kp.public,
             first_batch: start_batch,
             batches: subkeys,
 
             lock: RwLock::new(()),
-            offsets: Vec::new(),
+            offsets: VecDeque::new(),
             offsets_pk2: PublicKey::default(),
             offsets_pk2_sig: Signature::new([0; 64]),
             first_offset: 0,
-        };
+        }
     }
 
     /// Produces a OTS of some Hashable message under some OTSIdentifier.
@@ -192,8 +193,7 @@ impl OTSSecrets {
             };
         }
 
-        /*errmsg := fmt.Sprintf("tried to sign %v with out-of-range one-time identifier %v (firstbatch %d, len(batches) %d, firstoffset %d, len(offsets) %d)",
-        message, id, s.FirstBatch, len(s.Batches), s.FirstOffset, len(s.Offsets))*/
+        let msg = format!("tried to sign message with out-of-range one-time identifier {:?} (firstbatch={}, len(batches)={}, firstoffset={}, len(offsets)={})", id, self.first_batch, self.batches.len(), self.first_offset, self.offsets.len());
 
         // It's expected that we sometimes hit this error, when trying to sign
         // using an identifier of a block that we just reached agreement on and thus deleted.
@@ -202,26 +202,26 @@ impl OTSSecrets {
         // and it happens to be a batch boundary, but we don't have the batch
         // size (key dilution) parameter accessible here easily.
         if self.first_batch == id.batch + 1 && self.first_offset == id.offset + 1 {
-            //logging.Base().Info(errmsg)
+            info!("{}", msg);
         } else {
-            //logging.Base().Warn(errmsg)
+            warn!("{}", msg);
         }
 
         // TODO Default::default()?
-        return OTS {
+        OTS {
             sig: Signature::new([0; 64]),
             pk: Default::default(),
             pk1_sig: Signature::new([0; 64]),
             pk2: Default::default(),
             pk2_sig: Signature::new([0; 64]),
             _pk_sig_old: Signature::new([0; 64]),
-        };
+        }
     }
 
     /// Deletes ephemeral keys before (but not including) the given id.
-    // TODO: Securely wipe the keys from memory.
-    fn delete_before_fine_grained(&mut self, current: OTSIdentifier, num_keys_per_batch: u64) {
-        self.lock.write();
+    // TODO: Securely wipe the keys from memory. (is this done automatically in Drop?)
+    pub fn delete_before(&mut self, current: OTSIdentifier, num_keys_per_batch: u64) {
+        let _guard = self.lock.write().unwrap();
 
         // If we are just advancing in the same batch, simply delete some offset subkeys.
         if current.batch + 1 == self.first_batch {
@@ -282,7 +282,7 @@ impl OTSSecrets {
                 }
                 .hash_rep(),
             );
-            self.offsets.push(EphemeralSubkey {
+            self.offsets.push_back(EphemeralSubkey {
                 kp,
                 pk_sig_new: pksig,
             });
@@ -290,20 +290,26 @@ impl OTSSecrets {
 
         // 4. Delete the next batch subkey that we just expanded.
         self.first_batch += 1;
-        self.batches.drain(..1);
+        self.batches.pop_front();
     }
 
-    /*
-    /// Returns a copy of OTSSecrets consistent with respect to concurrent mutating calls
-    /// (specifically, delete_before*).
+    /// Returns a copy of OTSSecrets consistent with respect to concurrent mutating calls (specifically, delete_before).
     /// This snapshot can be used for serializing the OTSSecrets to persistent storage.
-    fn snapshot(&self) -> Self {
+    pub fn snapshot(&self) -> Self {
         let _guard = self.lock.read();
-        let mut ots_sec = (*self).clone();
-        ots_sec.lock = RwLock::new(());
-        return ots_sec;
+        // TODO move into a Clone impl on OTSSecrets?
+        // TODO do not clone at all? instead return reference and lock guard?
+        OTSSecrets {
+            verifier: self.verifier,
+            first_batch: self.first_batch,
+            batches: self.batches.clone(),
+            first_offset: self.first_offset,
+            offsets: self.offsets.clone(),
+            offsets_pk2: self.offsets_pk2,
+            offsets_pk2_sig: self.offsets_pk2_sig,
+            lock: RwLock::new(()),
+        }
     }
-    */
 }
 
 impl OTS {
@@ -323,58 +329,28 @@ impl OTS {
         };
 
         // TODO verify_prehashed or verify_strict?
-        if pk
-            .verify_strict(&batch_id.hash_rep(), &self.pk2_sig)
-            .is_err()
-        {
-            return false;
-        } else if batch_id
-            .sub_key_pk
-            .verify_strict(&offset_id.hash_rep(), &self.pk1_sig)
-            .is_err()
-        {
-            return false;
-        } else if offset_id
-            .sub_key_pk
-            .verify_strict(&msg.hash_rep(), &self.sig)
-            .is_err()
-        {
-            return false;
-        }
-        return true;
+        pk.verify_strict(&batch_id.hash_rep(), &self.pk2_sig)
+            .is_ok()
+            && batch_id
+                .sub_key_pk
+                .verify_strict(&offset_id.hash_rep(), &self.pk1_sig)
+                .is_ok()
+            && offset_id
+                .sub_key_pk
+                .verify_strict(&msg.hash_rep(), &self.sig)
+                .is_ok()
     }
 }
 
 impl Hashable for OTSSubkeyBatchID {
     fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>) {
-        // TODO change when protocol::encode is implemented
-        (
-            protocol::ONE_TIME_SIG_KEY1,
-            [
-                &self.sub_key_pk.to_bytes()[..],
-                &self.batch.to_be_bytes()[..],
-            ]
-            .concat()
-            .to_vec(),
-        )
-        //return (protocol::ONE_TIME_SIG_KEY1, protocol::encode(&self));
+        (protocol::ONE_TIME_SIG_KEY1, protocol::encode(&self))
     }
 }
 
 impl Hashable for OTSSubkeyOffsetID {
     fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>) {
-        // TODO change when protocol::encode is implemented
-        (
-            protocol::ONE_TIME_SIG_KEY2,
-            [
-                &self.sub_key_pk.to_bytes()[..],
-                &self.batch.to_be_bytes()[..],
-                &self.offset.to_be_bytes()[..],
-            ]
-            .concat()
-            .to_vec(),
-        )
-        //return (protocol::ONE_TIME_SIG_KEY2, protocol::encode(&self));
+        (protocol::ONE_TIME_SIG_KEY2, protocol::encode(&self))
     }
 }
 
@@ -387,6 +363,15 @@ struct EphemeralSubkey {
     /// Hashable interface for domain separation (the Hashable object is either
     /// OTSSubkeyBatchID or OTSSubkeyOffsetID).
     pub pk_sig_new: Signature,
+}
+
+impl Clone for EphemeralSubkey {
+    fn clone(&self) -> Self {
+        EphemeralSubkey {
+            kp: Keypair::from_bytes(&self.kp.to_bytes()).unwrap(),
+            pk_sig_new: self.pk_sig_new,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -433,7 +418,7 @@ mod tests {
             "signature verifies after changing offset"
         );
 
-        c.delete_before_fine_grained(next_offset_id, 256);
+        c.delete_before(next_offset_id, 256);
         let sig_after_delete = c.sign(&id, &s);
         assert!(
             !sig_after_delete.verify(&id, &s, &c.verifier),
@@ -458,7 +443,7 @@ mod tests {
 
         let mut next_batch_offset_id = next_batch_id;
         next_batch_offset_id.offset += 1;
-        c.delete_before_fine_grained(next_batch_offset_id, 256);
+        c.delete_before(next_batch_offset_id, 256);
         let sig_after_delete = c.sign(&next_batch_id, &s);
         assert!(
             !sig_after_delete.verify(&next_batch_id, &s, &c.verifier),
@@ -480,7 +465,7 @@ mod tests {
 
         let mut big_jump_id = next_batch_offset_id;
         big_jump_id.batch += 10;
-        c.delete_before_fine_grained(big_jump_id, 256);
+        c.delete_before(big_jump_id, 256);
 
         let mut pre_big_jump_id = big_jump_id;
         pre_big_jump_id.batch -= 1;

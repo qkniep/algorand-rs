@@ -40,7 +40,7 @@ pub const TESTNET: protocol::NetworkID = "testnet";
 pub const MAINNET: protocol::NetworkID = "mainnet";
 
 /// The name of the file containing the genesis block.
-pub const GENESIS_JSON_FILE: &'static str = "genesis.json";
+pub const GENESIS_JSON_FILE: &str = "genesis.json";
 
 // Bit flags for enabling different DNSSEC checks.
 const DNSSEC_SRV: u32 = 1;
@@ -458,25 +458,25 @@ pub struct Local {
 // Filenames of config files within the configdir (e.g. ~/.algorand)
 
 /// Name of the config.json file where we store per-algod-instance settings.
-const CONFIG_FILENAME: &'static str = "config.json";
+const CONFIG_FILENAME: &str = "config.json";
 
 /// PhonebookFilename is the name of the phonebook configuration files (no longer used).
-const PHONEBOOK_FILENAME: &'static str = "phonebook.json"; // no longer used in product - still in tests
+const PHONEBOOK_FILENAME: &str = "phonebook.json"; // no longer used in product - still in tests
 
 /// Prefix of the name of the ledger database files.
-const LEDGER_FILENAME_PREFIX: &'static str = "ledger";
+const LEDGER_FILENAME_PREFIX: &str = "ledger";
 
 /// Name of the agreement database file.
 /// It is used to recover from node crashes.
-const CRASH_FILENAME: &'static str = "crash.sqlite";
+const CRASH_FILENAME: &str = "crash.sqlite";
 
 /// Name of the compact certificate database file.
 /// It is used to track in-progress compact certificates.
-const COMPACT_CERT_FILENAME: &'static str = "compactcert.sqlite";
+const COMPACT_CERT_FILENAME: &str = "compactcert.sqlite";
 
 /// Defines a set of consensus prototocols that are to be loaded from the data directory (if present),
 /// to override the built-in supported consensus protocols.
-const CONFIGURABLE_CONSENSUS_PROTOCOLS_FILENAME: &'static str = "consensus.json";
+const CONFIGURABLE_CONSENSUS_PROTOCOLS_FILENAME: &str = "consensus.json";
 
 impl Local {
     /// Returns a Local config structure based on merging the defaults

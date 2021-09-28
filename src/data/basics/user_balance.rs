@@ -91,7 +91,7 @@ impl TryFrom<&str> for Status {
 /// This includes the account balance, cryptographic public keys,
 /// consensus delegation status, asset data, and application data.
 #[derive(Clone, Default)]
-struct AccountData {
+pub struct AccountData {
     pub status: Status,
     pub micro_algos: MicroAlgos,
 
@@ -196,14 +196,14 @@ struct AccountData {
 ///   1) without looking up the AppParams, and
 ///   2) even if the application has been deleted
 #[derive(Clone)]
-struct AppLocalState {
+pub struct AppLocalState {
     pub schema: StateSchema,
     pub key_value: TealKeyValue,
 }
 
 /// Stores the global information associated with an application.
 #[derive(Clone)]
-struct AppParams {
+pub struct AppParams {
     pub approval_program: Vec<u8>,
     pub clear_state_program: Vec<u8>,
     pub global_state: TealKeyValue,
@@ -213,7 +213,7 @@ struct AppParams {
 
 /// Thin wrapper around the LocalStateSchema and the GlobalStateSchema, since they are often needed together.
 #[derive(Clone)]
-struct StateSchemas {
+pub struct StateSchemas {
     pub local_state_schema: StateSchema,
     pub global_state_schema: StateSchema,
 }
@@ -355,17 +355,17 @@ impl Hashable for AppIndex {
 impl AppIndex {
     /// Yields the "app address" of the app.
     fn address(&self) -> Address {
-        return Address::new(crypto::hash_obj(self));
+        Address::new(crypto::hash_obj(self))
     }
 }
 
 impl AccountData {
     fn new(status: Status, algos: MicroAlgos) -> Self {
-        return Self {
+        Self {
             status,
             micro_algos: algos,
             ..Default::default()
-        };
+        }
     }
 
     /// Returns the amount of MicroAlgos associated with the user's account.
@@ -375,7 +375,7 @@ impl AccountData {
         rewards_level: u64,
     ) -> (MicroAlgos, MicroAlgos) {
         let e = self.with_updated_rewards(proto, rewards_level);
-        return (e.micro_algos, e.rewarded_micro_algos);
+        (e.micro_algos, e.rewarded_micro_algos)
     }
 
     /// Computes the amount of rewards (in microalgos) that have yet to be added to the account balance.
@@ -389,7 +389,7 @@ impl AccountData {
     ) -> MicroAlgos {
         let rewards_units = micro_algos.reward_units(proto);
         let rewards_delta = rewards_level - rewards_base;
-        return MicroAlgos(rewards_units * rewards_delta);
+        MicroAlgos(rewards_units * rewards_delta)
     }
 
     /// Returns an updated number of algos in an AccountData to reflect rewards up to some rewards level.
@@ -415,7 +415,7 @@ impl AccountData {
             ad.rewarded_micro_algos = MicroAlgos(ad.rewarded_micro_algos.0 + rewards.0);
         }
 
-        return ad;
+        ad
     }
 
     /// Computes the minimum balance requirements for an account based on some consensus parameters.
@@ -451,27 +451,25 @@ impl AccountData {
             .saturating_mul(self.total_extra_app_pages as u64);
         min = min.saturating_add(extra_app_program_len_cost);
 
-        return MicroAlgos(min);
+        MicroAlgos(min)
     }
 
     /// Returns the amount of MicroAlgos associated with the user's account
     /// for the purpose of participating in the Algorand protocol.
     /// It assumes the caller has already updated rewards appropriately using `with_updated_rewards()`.
     fn voting_stake(&self) -> MicroAlgos {
-        if self.status != Status::Online {
-            return MicroAlgos(0);
+        match self.status {
+            Status::Online => self.micro_algos,
+            _ => MicroAlgos(0),
         }
-
-        return self.micro_algos;
     }
 
     /// Returns the key dilution for this account, returning the default key dilution if not explicitly specified.
     fn key_dilution(&self, proto: config::ConsensusParams) -> u64 {
-        if self.vote_key_dilution != 0 {
-            return self.vote_key_dilution;
+        match self.vote_key_dilution {
+            0 => proto.default_key_dilution,
+            _ => self.vote_key_dilution,
         }
-
-        return proto.default_key_dilution;
     }
 
     /*
@@ -527,22 +525,21 @@ impl AccountData {
             );
         }
 
-        let norm = norm.unwrap().checked_div(per_reward_unit);
-
-        // Mathematically should be impossible to overflow because `per_reward_unit >= proto.reward_unit`,
-        // as long as `self.reward_base` isn't huge enough to cause overflow.
-        if norm.is_none() {
-            // TODO use logger
-            panic!(
-                "overflow computing normalized balance {} * {} / ({} + {})",
-                self.micro_algos.to_u64(),
-                proto.reward_unit,
-                self.rewards_base,
-                proto.reward_unit
-            );
+        match norm.unwrap().checked_div(per_reward_unit) {
+            // Mathematically should be impossible to overflow because `per_reward_unit >= proto.reward_unit`,
+            // as long as `self.reward_base` isn't huge enough to cause overflow.
+            None => {
+                // TODO use logger
+                panic!(
+                    "overflow computing normalized balance {} * {} / ({} + {})",
+                    self.micro_algos.to_u64(),
+                    proto.reward_unit,
+                    self.rewards_base,
+                    proto.reward_unit
+                );
+            }
+            Some(n) => n,
         }
-
-        return norm.unwrap();
     }
 }
 

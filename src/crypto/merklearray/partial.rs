@@ -50,7 +50,7 @@ impl Siblings<'_> {
             .unwrap_or(&CryptoHash([0; HASH_LEN]));
 
         self.hints.push_back(res.clone());
-        return Ok(res.clone());
+        Ok(res.clone())
     }
 }
 
@@ -105,6 +105,6 @@ impl PartialLayer {
             });
         }
 
-        return Ok(res);
+        Ok(res)
     }
 }

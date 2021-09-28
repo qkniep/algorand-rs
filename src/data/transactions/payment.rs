@@ -40,7 +40,7 @@ impl PaymentFields {
             return Err(PaymentError::CannotCloseToSender);
         }
 
-        // the FeeSink account may only spend to the IncentivePool
+        // the fee sink account may only spend to the rewards pool
         if header.sender == spec.fee_sink {
             if self.receiver != spec.rewards_pool {
                 return Err(PaymentError::CannotSpendFromFeeSink);
@@ -48,6 +48,6 @@ impl PaymentFields {
                 return Err(PaymentError::CannotCloseFeeSink);
             }
         }
-        return Ok(());
+        Ok(())
     }
 }

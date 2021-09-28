@@ -5,9 +5,12 @@ use serde::{Deserialize, Serialize};
 
 use std::fmt;
 
-// !!! *************************************************************************************** !!!
-// !!! *** Please update CURRENT_CONSENSUS_VERSION below when adding new protocol versions *** !!!
-// !!! *************************************************************************************** !!!
+// !!! ********************************************************************************* !!!
+// !!! *** Please update CURRENT_CONSENSUS_VERSION when adding new protocol versions *** !!!
+// !!! ********************************************************************************* !!!
+
+/// ConsensusCurrentVersion is the latest version and should be used when a specific version is not provided.
+pub const CURRENT_CONSENSUS_VERSION: ConsensusVersion = ConsensusVersion::V30;
 
 /// A string that identifies a version of the consensus protocol.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -120,6 +123,12 @@ pub enum ConsensusVersion {
     Future, // "future";
 }
 
+impl Default for ConsensusVersion {
+    fn default() -> Self {
+        CURRENT_CONSENSUS_VERSION
+    }
+}
+
 impl fmt::Display for ConsensusVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
@@ -158,9 +167,6 @@ impl fmt::Display for ConsensusVersion {
         })
     }
 }
-
-/// ConsensusCurrentVersion is the latest version and should be used when a specific version is not provided.
-pub const CURRENT_CONSENSUS_VERSION: ConsensusVersion = ConsensusVersion::V30;
 
 /// UnsupportedConsensusProtocol is used to indicate that an unsupported protocol has been detected.
 #[derive(Clone, Debug)]
