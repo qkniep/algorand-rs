@@ -1030,7 +1030,7 @@ fn init_consensus_protocols(consensus: &mut ConsensusProtocols) {
     v_future.compact_cert_top_voters = 1024 * 1024;
     v_future.compact_cert_voters_lookback = 16;
     // TODO does this make sense?
-    v_future.compact_cert_weight_threshold = ((1u64 << 32) * 30 / 100) as u32;
+    v_future.compact_cert_weight_threshold = ((1_u64 << 32) * 30 / 100) as u32;
     v_future.compact_cert_sec_kq = 128;
 
     consensus.0.insert(protocol::ConsensusVersion::V7, v7);

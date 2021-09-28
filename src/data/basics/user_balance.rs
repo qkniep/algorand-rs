@@ -37,7 +37,7 @@ impl Default for Status {
 
 /// Rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
 /// This number is verified by the `test_encoded_account_data_size` function.
-pub const MAX_ENCODED_ACCOUNT_DATA_SIZE: usize = 850000;
+pub const MAX_ENCODED_ACCOUNT_DATA_SIZE: usize = 850_000;
 
 /// Decoder limit of number of assets stored per account.
 /// It's being verified by the unit test `test_encoded_account_allocation_bounds` to align
@@ -401,7 +401,7 @@ impl AccountData {
     ) -> AccountData {
         let mut ad = self.clone();
         if ad.status != Status::NotParticipating {
-            let rewards_units = ad.micro_algos.reward_units(&proto);
+            let rewards_units = ad.micro_algos.reward_units(proto);
             let rewards_delta = rewards_level - ad.rewards_base;
             let rewards = MicroAlgos(rewards_units * rewards_delta);
             ad.micro_algos = MicroAlgos(ad.micro_algos.0 + rewards.0);

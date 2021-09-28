@@ -205,7 +205,7 @@ impl Transaction {
 
     /// Checks if the transaction involves a given address.
     fn match_address(&self, addr: basics::Address, spec: SpecialAddresses) -> bool {
-        self.relevant_addrs(spec).contains(&addr)
+        self.relevant_addrs(&spec).contains(&addr)
     }
 
     /// Checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger).
@@ -240,17 +240,7 @@ impl Transaction {
                     }
                 }
             }
-            Self::AssetConfig(_, _) => {
-                if !proto.asset {
-                    return Err(InvalidTx::AssetTxsNotSupported);
-                }
-            }
-            Self::AssetTransfer(_, _) => {
-                if !proto.asset {
-                    return Err(InvalidTx::AssetTxsNotSupported);
-                }
-            }
-            Self::AssetFreeze(_, _) => {
+            Self::AssetConfig(_, _) | Self::AssetTransfer(_, _) | Self::AssetFreeze(_, _) => {
                 if !proto.asset {
                     return Err(InvalidTx::AssetTxsNotSupported);
                 }
@@ -296,7 +286,7 @@ impl Transaction {
                 }
 
                 // Sum up argument lengths
-                let mut arg_sum = 0u64;
+                let mut arg_sum = 0_u64;
                 for arg in &fields.application_args {
                     arg_sum = arg_sum.saturating_add(arg.len() as u64);
                 }
@@ -501,7 +491,7 @@ impl Transaction {
 
     /// Returns the addresses whose balance records this transaction will need to access.
     /// The header's default is to return just the sender and the fee sink.
-    fn relevant_addrs(&self, spec: SpecialAddresses) -> Vec<basics::Address> {
+    fn relevant_addrs(&self, spec: &SpecialAddresses) -> Vec<basics::Address> {
         let mut addrs = vec![self.header().sender, spec.fee_sink];
 
         match self {

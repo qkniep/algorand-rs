@@ -51,7 +51,7 @@ impl Address {
 impl fmt::Display for Address {
     /// Returns a string representation of Address
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut addr_with_checksum = [0u8; 32 + CHECKSUM_LEN];
+        let mut addr_with_checksum = [0_u8; 32 + CHECKSUM_LEN];
         addr_with_checksum[..32].copy_from_slice(&self.0[..]);
         // calling addr.GetChecksum() here takes 20ns more than just rolling it out, so we'll just repeat that code.
         // let short_addr_hash = crypto.Hash(self.0);

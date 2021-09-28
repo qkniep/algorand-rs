@@ -131,7 +131,8 @@ impl StateSchema {
 
     /// Counts the total number of values that may be stored for particular schema.
     pub fn num_entries(&self) -> u64 {
-        0u64.saturating_add(self.num_uint)
+        0_u64
+            .saturating_add(self.num_uint)
             .saturating_add(self.num_byte_slice)
     }
 
@@ -151,7 +152,7 @@ impl StateSchema {
             .saturating_mul(self.num_byte_slice);
 
         // Sum the separate costs
-        let mut min = 0u64;
+        let mut min = 0_u64;
         min = min.saturating_add(flat_cost);
         min = min.saturating_add(uint_cost);
         min = min.saturating_add(bytes_cost);

@@ -88,7 +88,7 @@ pub fn wrap_signed_txs_with_ad(tx_group: &[SignedTx]) -> Vec<SignedTxWithAD> {
 /// Computes the amount of fee credit that can be spent on inner TXs because it was more than required.
 pub fn fee_credit(tx_group: &[SignedTx], min_fee: u64) -> Result<u64, ()> {
     let mut min_fee_count = 0;
-    let mut fees_paid = 0u64;
+    let mut fees_paid = 0_u64;
     for stxn in tx_group {
         if let Transaction::CompactCert(_, _) = stxn.tx {
             min_fee_count += 1;

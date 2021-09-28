@@ -293,8 +293,6 @@ impl MultisigSignature {
                     } else if subsig.sig != usig.subsigs[i].sig {
                         // invalid duplicates
                         return Err(MultisigError::InvalidDuplicates);
-                    } else {
-                        // valid duplicates
                     }
                 }
             }

@@ -107,10 +107,10 @@ pub fn mnemonic_to_key(mnemonic: &[String]) -> Result<[u8; KEY_LEN_BYTES], Mnemo
     bytes.pop();
     let bytes: [u8; KEY_LEN_BYTES] = bytes.as_slice().try_into().unwrap();
 
-    if checksum(&bytes) != base11[base11.len() - 1] {
-        Err(MnemonicError::WrongChecksum)
-    } else {
+    if checksum(&bytes) == base11[base11.len() - 1] {
         Ok(bytes)
+    } else {
+        Err(MnemonicError::WrongChecksum)
     }
 }
 
