@@ -23,6 +23,21 @@ const SUITE_STRING: [u8; 1] = [0x04];
 /// A single byte string identifying ECVRF-ED25519-SHA512-Elligator2.
 const COFACTOR: u32 = 8;
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VrfKeypair {
+    private: [u8; 32],
+    public: VrfPublicKey,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VrfPublicKey([u8; 32]);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VrfProof([u8; 80]);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VrfOutput([u8; 64]);
+
 /// Different errors that can be raised when proving/verifying VRFs.
 #[derive(Debug, Error)]
 pub enum VrfError {
@@ -42,21 +57,6 @@ pub enum VrfError {
     #[error("Unknown error")]
     Unknown,
 }
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct VrfKeypair {
-    private: [u8; 32],
-    public: VrfPublicKey,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct VrfPublicKey([u8; 32]);
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VrfProof([u8; 80]);
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VrfOutput([u8; 64]);
 
 impl VrfKeypair {
     /// Generates a private/public keypair from a secret seed.
@@ -214,7 +214,7 @@ impl Digest for TruncHasher {
 /// Cryptographically hash byte string to ed25519 curve point, as specified in:
 /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03 (section 5.4.1.2).
 fn hash_to_curve(pk: &VrfPublicKey, bytes: &[u8]) -> Result<EdwardsPoint, VrfError> {
-    let s = [&SUITE_STRING, &[0x01], &pk.0[..], &bytes[..]].concat();
+    let s = [&SUITE_STRING, &[0x01], &pk.0[..], bytes].concat();
 
     // Hack to avoid forking curve25519_dalek crate because it implements a newer IETF draft:
     // Hash in here and tell `hash_from_bytes` function to use TruncHasher.

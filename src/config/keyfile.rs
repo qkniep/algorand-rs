@@ -34,20 +34,20 @@ pub fn matches_part_key_filename(account: &str, filename: &str) -> bool {
 /// Returns true iff the given filename is a valid root key filename.
 pub fn is_root_key_filename(filename: &str) -> bool {
     let n = account_name_from_part_key_filename(filename);
-    return matches_root_key_filename(&n, filename);
+    matches_root_key_filename(&n, filename)
 }
 
 /// Returns true iff the given filename is a valid participation key filename.
 pub fn is_part_key_filename(filename: &str) -> bool {
     let n = account_name_from_part_key_filename(filename);
-    return matches_part_key_filename(&n, filename);
+    matches_part_key_filename(&n, filename)
 }
 
 /// Returns the account name given a root key filename.
 ///
 /// If filename is not a valid root key filename, this returns the filename unchanged.
 pub fn account_name_from_root_key_filename(filename: &str) -> String {
-    return filename.trim_end_matches(".rootkey").to_owned();
+    filename.trim_end_matches(".rootkey").to_owned()
 }
 
 /// Returns the account name given a participation key filename.
@@ -56,14 +56,14 @@ pub fn account_name_from_root_key_filename(filename: &str) -> String {
 pub fn account_name_from_part_key_filename(filename: &str) -> String {
     if let Some((first, last)) = extract_part_valid_interval(filename) {
         let suffix = format!(".{}.{}.partkey", first.0, last.0);
-        return filename.trim_end_matches(&suffix).to_owned();
+        filename.trim_end_matches(&suffix).to_owned()
     } else {
-        return filename.to_owned();
+        filename.to_owned()
     }
 }
 
 fn extract_part_valid_interval(filename: &str) -> Option<(basics::Round, basics::Round)> {
-    let parts: Vec<&str> = filename.split(".").into_iter().collect();
+    let parts: Vec<&str> = filename.split('.').into_iter().collect();
     let np = parts.len();
     if np < 4 {
         return None;

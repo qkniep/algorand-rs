@@ -528,7 +528,7 @@ impl ConsensusProtocols {
                 // delete the existing reference to this consensus version
                 for (ver, par) in &self.0 {
                     if *ver == version {
-                        static_consensus.0.remove(&ver);
+                        static_consensus.0.remove(ver);
                     } else if par.approved_upgrades.contains_key(&version) {
                         // delete upgrade to deleted version
                         static_consensus
@@ -578,7 +578,7 @@ pub fn load_configurable_consensus_protocols(
     if new_consensus.len() > 0 {
         *consensus = new_consensus;
         // Set allocation limits
-        for (_, p) in &consensus.0 {
+        for p in consensus.0.values() {
             // TODO add again, once implemented
             //check_set_alloc_bounds(p);
         }

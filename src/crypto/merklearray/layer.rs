@@ -32,7 +32,7 @@ impl Layer {
             })
             .collect();
 
-        return Layer(v);
+        Layer(v)
     }
 }
 
@@ -41,6 +41,6 @@ impl Hashable for Pair {
         let mut buf = [0; 2 * HASH_LEN];
         buf[..HASH_LEN].copy_from_slice(&self.l.0[..]);
         buf[HASH_LEN..].copy_from_slice(&self.r.0[..]);
-        return (protocol::MERKLE_ARRAY_NODE, buf.to_vec());
+        (protocol::MERKLE_ARRAY_NODE, buf.to_vec())
     }
 }

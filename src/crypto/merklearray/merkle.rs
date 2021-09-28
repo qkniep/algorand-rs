@@ -18,7 +18,7 @@ pub struct Tree {
 
 impl Tree {
     /// Constructs a Merkle tree given an array.
-    pub fn from_array(array: &Vec<impl Hashable>) -> Result<Self, ()> {
+    pub fn from_array(array: &[impl Hashable]) -> Result<Self, ()> {
         let mut tree = Self {
             levels: vec![Layer(array.iter().map(|h| hash_obj(h)).collect())],
         };
@@ -27,7 +27,7 @@ impl Tree {
             tree.levels.push(tree.top_layer().up());
         }
 
-        return Ok(tree);
+        Ok(tree)
     }
 
     /// Returns the root hash of the Merkle tree.
@@ -37,7 +37,7 @@ impl Tree {
             return CryptoHash([0; HASH_LEN]);
         }
 
-        return self.top_layer().0[0].clone();
+        self.top_layer().0[0].clone()
     }
 
     /// Constructs a proof for some set of positions in the array that was used to construct the tree.
@@ -54,7 +54,7 @@ impl Tree {
             return Err(());
         }
 
-        idxs.sort();
+        idxs.sort_unstable();
 
         let mut pl = PartialLayer(Vec::new());
         for &pos in idxs.iter() {
@@ -64,7 +64,7 @@ impl Tree {
             }
 
             // Discard duplicates
-            if pl.0.len() > 0 && pl.0[pl.0.len() - 1].pos == pos {
+            if !pl.0.is_empty() && pl.0.last().unwrap().pos == pos {
                 continue;
             }
 
@@ -75,7 +75,7 @@ impl Tree {
         }
 
         let mut s = Siblings {
-            tree: &self,
+            tree: self,
             hints: VecDeque::new(),
         };
 
@@ -97,7 +97,7 @@ impl Tree {
             }
         }
 
-        return Ok(s.hints.into());
+        Ok(s.hints.into())
     }
 
     /// Ensures that the positions in elems correspond to the respective hashes in a tree with the given root hash.
@@ -105,7 +105,7 @@ impl Tree {
     pub fn verify(
         root: &CryptoHash,
         elems: HashMap<u64, CryptoHash>,
-        proof: &Vec<CryptoHash>,
+        proof: &[CryptoHash],
     ) -> Result<(), ()> {
         if elems.is_empty() {
             if !proof.is_empty() {
@@ -126,7 +126,7 @@ impl Tree {
         let tree = Tree { levels: Vec::new() };
         let mut s = Siblings {
             tree: &tree,
-            hints: proof.clone().into(),
+            hints: proof.to_owned().into(),
         };
 
         let mut l = 0;

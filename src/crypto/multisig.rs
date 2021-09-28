@@ -7,27 +7,13 @@ use ed25519::Signature;
 use ed25519_dalek::{Keypair, PublicKey, Signer};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512Trunc256};
+use thiserror::Error;
 
 use crate::crypto::batch_verifier::BatchVerifier;
 
 const MAX_MULTISIG: u8 = 255;
 
 // TODO implement and use Hashable trait
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-// TODO implement std::error::Error trait (using crate thiserror?)
-pub enum MultisigError {
-    UnknownVersion(u8),
-    InvalidThreshold,
-    InvalidSignature,
-    InvalidAddress,
-    InvalidNumberOfSignatures,
-    KeyNotExists,
-    ThresholdsDontMatch(u8, u8),
-    VersionsDontMatch(u8, u8),
-    KeysDontMatch,
-    InvalidDuplicates,
-}
 
 #[derive(Debug, PartialEq, Eq)]
 struct MultisigAddr([u8; 32]);
@@ -43,6 +29,30 @@ pub struct MultisigSignature {
     pub version: u8,
     pub threshold: u8,
     pub subsigs: Vec<MultisigSubsig>,
+}
+
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
+pub enum MultisigError {
+    #[error("unknown version {0}")]
+    UnknownVersion(u8),
+    #[error("invalid threshold")]
+    InvalidThreshold,
+    #[error("at least one signature was invalid")]
+    InvalidSignature,
+    #[error("invalid address")]
+    InvalidAddress,
+    #[error("invalid number of signatures provided")]
+    InvalidNumberOfSignatures,
+    #[error("key does not exist")]
+    KeyNotExists,
+    #[error("thresholds don't match: {0} != {1}")]
+    ThresholdsDontMatch(u8, u8),
+    #[error("versions don't match: {0} != {1}")]
+    VersionsDontMatch(u8, u8),
+    #[error("public key lists don't match")]
+    KeysDontMatch,
+    #[error("invalid duplicates")]
+    InvalidDuplicates,
 }
 
 impl MultisigAddr {

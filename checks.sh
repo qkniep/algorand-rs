@@ -37,8 +37,8 @@ else
 fi
 echo ""
 
-echo -e "${BLU}Asking the picky clippy if it's satisfied with your code...${RST}"
-if cargo clippy; then
+echo -e "${BLU}Asking picky clippy if it's satisfied with your code...${RST}"
+if cargo clippy -- -F clippy::suspicious -F clippy::complexity -F clippy::perf -W clippy::pedantic; then
     echo -e "${GRN}Clippy is satisfied.${RST}"
 else
     echo -e "${RED}Clippy doesn't like a few things about your code!${RST}"

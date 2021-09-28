@@ -484,12 +484,14 @@ impl Local {
     /// If the custom file cannot be loaded, the default config is returned
     /// (with the error from loading the custom file).
     fn load_from_disk(custom: &impl AsRef<OsStr>) -> Result<Self> {
-        return Self::load_from_file(&Path::new(&custom).join(CONFIG_FILENAME));
+        Self::load_from_file(&Path::new(&custom).join(CONFIG_FILENAME))
     }
 
     fn load_from_file(file: &impl AsRef<Path>) -> Result<Self> {
-        let mut c = Self::default();
-        c.version = 0; // Reset to 0 so we get the version from the loaded file.
+        let mut c = Self {
+            version: 0, // Set to 0 so we get the version from the loaded file.
+            ..Self::default()
+        };
         c.merge_from_file(file)?;
 
         // Migrate in case defaults were changed
@@ -497,11 +499,11 @@ impl Local {
         // All fields listed in migrate() might be changed if an actual value matches to default value from a previous version.
         // TODO reimplement migrate
         //migrate::migrate(c)?;
-        return Ok(c);
+        Ok(c)
     }
 
     fn merge_from_dir(&mut self, root: &impl AsRef<OsStr>) -> Result<()> {
-        return self.merge_from_file(&Path::new(&root).join(CONFIG_FILENAME));
+        self.merge_from_file(&Path::new(&root).join(CONFIG_FILENAME))
     }
 
     fn merge_from_file(&mut self, full_path: &impl AsRef<Path>) -> Result<()> {
@@ -510,30 +512,30 @@ impl Local {
 
         // For now, all relays (listening for incoming connections) are also Archival.
         // We can change this logic in the future, but it's currently the sanest default.
-        if self.net_address != "" {
+        if !self.net_address.is_empty() {
             self.archival = true;
             self.enable_ledger_service = true;
             self.enable_block_service = true;
         }
 
-        return Ok(());
+        Ok(())
     }
 
     fn load(&mut self, content: &str) -> io::Result<()> {
-        *self = serde_json::from_str(content.clone())?;
-        return Ok(());
+        *self = serde_json::from_str(content)?;
+        Ok(())
     }
 
     /// Returns an array of one or more DNS Bootstrap identifiers.
     fn dns_bootsrap_array(&self, network: protocol::NetworkID) -> Vec<String> {
         let dns_str = self.dns_bootstrap(network);
-        let array = dns_str.split(";");
+        let array = dns_str.split(';');
         // omit zero length entries from the result set.
-        return array
+        array
             .into_iter()
-            .filter(|entry| entry.len() > 0)
+            .filter(|e| !e.is_empty())
             .map(|s| s.to_owned())
-            .collect();
+            .collect()
     }
 
     /// Returns the network-specific DNSBootstrap identifier.
@@ -548,7 +550,7 @@ impl Local {
                 _ => {}
             }
         }
-        return self.dns_bootstrap_id.replace("<network>", &network);
+        self.dns_bootstrap_id.replace("<network>", network)
     }
 
     /// Writes the Local settings into a root/ConfigFilename file.
@@ -556,20 +558,18 @@ impl Local {
         let configpath = Path::new(root).join(CONFIG_FILENAME);
         let configpath_str = configpath.into_os_string().into_string().unwrap();
         let expanded_path = shellexpand::env(&configpath_str);
-        return self.save_to_file(&expanded_path.unwrap());
+        self.save_to_file(&expanded_path.unwrap())
     }
 
     /// Saves the config to a specific filename, allowing overriding the default name.
     // TODO actually write to file once util/codecs is implemented
     pub fn save_to_file(&self, filename: &str) -> io::Result<()> {
-        let mut always_include = Vec::new();
-        always_include.push("Version".to_owned());
-        return Ok(());
+        Ok(())
         /*return codecs.SaveNonDefaultValuesToFile(
             filename,
             cfg,
             DEFAULT_LOCAL,
-            alwaysInclude,
+            vec!["Version".to_owned()],
             true,
         );*/
     }
@@ -640,7 +640,7 @@ pub fn load_phonebook(datadir: &str) -> io::Result<Vec<String>> {
     //entries = phonebook.include
 
     // get an initial list of peers
-    return Ok(entries);
+    Ok(entries)
 }
 
 /// Writes the phonebook into a root/PhonebookFilename file.
@@ -656,13 +656,13 @@ pub fn save_phonebook_to_disk(entries: Vec<String>, root: &str) -> Result<()> {
         .mode(0o600)
         .open(&*expanded_path.unwrap())?;
     save_phonebook(entries, &mut f)?;
-    return Ok(());
+    Ok(())
 }
 
 fn save_phonebook(entries: Vec<String>, w: &mut impl io::Write) -> Result<()> {
     let pb = PhonebookBlackWhiteList { include: entries };
     // codecs.NewFormattedJSONEncoder(w)
-    return Ok(serde_json::to_writer_pretty(w, &pb)?);
+    Ok(serde_json::to_writer_pretty(w, &pb)?)
 }
 
 lazy_static! {
@@ -672,8 +672,7 @@ lazy_static! {
 /// Retrieves the full path to a configuration file.
 /// These are global configurations - not specific to data-directory / network.
 pub fn get_config_file_path(file: &str) -> Result<PathBuf> {
-    let root_path = get_global_config_file_root()?;
-    return Ok(root_path.join(file));
+    Ok(get_global_config_file_root()?.join(file))
 }
 
 /// GetGlobalConfigFileRoot returns the current root folder for global configuration files.
@@ -685,7 +684,7 @@ pub fn get_global_config_file_root() -> io::Result<PathBuf> {
         // TODO use permissions 0o777
         fs::create_dir(gcfr.clone())?;
     }
-    return Ok(gcfr.clone());
+    Ok(gcfr.clone())
 }
 
 /// Allows overriding the root folder for global configuration files.
@@ -694,7 +693,7 @@ pub fn get_global_config_file_root() -> io::Result<PathBuf> {
 pub fn set_global_config_file_root(root_path: &impl AsRef<PathBuf>) -> PathBuf {
     let current_root = GLOBAL_CONFIG_FILE_ROOT.read().unwrap().clone();
     *GLOBAL_CONFIG_FILE_ROOT.write().unwrap() = root_path.as_ref().clone();
-    return current_root;
+    current_root
 }
 
 /// Retrieves the default directory for global (not per-instance) config files.

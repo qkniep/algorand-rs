@@ -9,7 +9,8 @@ use std::fmt;
 // !!! *** Please update CURRENT_CONSENSUS_VERSION when adding new protocol versions *** !!!
 // !!! ********************************************************************************* !!!
 
-/// ConsensusCurrentVersion is the latest version and should be used when a specific version is not provided.
+/// Latest version of the consensus protocol.
+/// It should be used when a specific version is not provided.
 pub const CURRENT_CONSENSUS_VERSION: ConsensusVersion = ConsensusVersion::V30;
 
 /// A string that identifies a version of the consensus protocol.
@@ -168,7 +169,7 @@ impl fmt::Display for ConsensusVersion {
     }
 }
 
-/// UnsupportedConsensusProtocol is used to indicate that an unsupported protocol has been detected.
+/// Indicates that an unsupported protocol has been detected.
 #[derive(Clone, Debug)]
 struct UnsupportedConsensusProtocol(ConsensusVersion);
 

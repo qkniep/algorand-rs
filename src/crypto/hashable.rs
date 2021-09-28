@@ -33,7 +33,7 @@ pub trait Hashable {
 
     fn hash_rep(&self) -> Vec<u8> {
         let (id, data) = self.to_be_hashed();
-        return [id.as_bytes(), &data].concat().to_vec();
+        [id.as_bytes(), &data].concat().to_vec()
     }
 }
 
@@ -71,13 +71,13 @@ impl TryFrom<&str> for CryptoHash {
         if decoded.len() != HASH_LEN {
             return Err(HashError::WrongLength(decoded.len()));
         }
-        return Ok(CryptoHash(decoded.try_into().unwrap()));
+        Ok(CryptoHash(decoded.try_into().unwrap()))
     }
 }
 
 /// Computes the SHA-512/256 hash of an array of bytes.
 pub fn hash(data: &[u8]) -> CryptoHash {
-    CryptoHash(Sha512Trunc256::digest(&data)[..].try_into().unwrap())
+    CryptoHash(Sha512Trunc256::digest(data)[..].try_into().unwrap())
 }
 
 /// Computes a hash of a Hashable object and its type.

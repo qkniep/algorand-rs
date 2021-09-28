@@ -3,6 +3,8 @@
 # Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 # Distributed under terms of the MIT license.
 
+rustup component add clippy
+
 cargo install cargo-audit --features vendored-libgit2
 #cargo install cargo-bloat
 

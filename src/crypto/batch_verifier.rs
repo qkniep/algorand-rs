@@ -26,7 +26,7 @@ impl BatchVerifier {
     // MakeBatchVerifierDefaultSize create a BatchVerifier instance. This function pre-allocates
     // amount of free space to enqueue signatures without exapneding
     pub fn new() -> Self {
-        return Self::with_capacity(MIN_CAPACITY);
+        Self::with_capacity(MIN_CAPACITY)
     }
 
     // MakeBatchVerifier create a BatchVerifier instance. This function pre-allocates
@@ -34,11 +34,11 @@ impl BatchVerifier {
     pub fn with_capacity(capacity: usize) -> Self {
         // preallocate enough storage for the expected usage. We will reallocate as needed.
         let capacity = max(capacity, MIN_CAPACITY);
-        return BatchVerifier {
+        BatchVerifier {
             messages: Vec::with_capacity(capacity),
             public_keys: Vec::with_capacity(capacity),
             signatures: Vec::with_capacity(capacity),
-        };
+        }
     }
 
     pub fn enque_sig(&mut self, pk: PublicKey, msg: &[u8], sig: Signature) {
@@ -49,7 +49,7 @@ impl BatchVerifier {
 
     // GetNumberOfEnqueuedSignatures returns the number of signatures current enqueue onto the bacth verifier object
     pub fn num_sigs_enqued(&self) -> usize {
-        return self.messages.len();
+        self.messages.len()
     }
 
     // Verify verifies that all the signatures are valid. in that case nil is returned
@@ -68,7 +68,7 @@ impl BatchVerifier {
             }
         }
 
-        return Ok(());
+        Ok(())
     }
 }
 

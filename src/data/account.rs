@@ -185,7 +185,7 @@ impl Participation {
     pub fn delete_old_keys(
         &mut self,
         current: basics::Round,
-        proto: config::ConsensusParams,
+        proto: &config::ConsensusParams,
     ) -> Result<(), sled::Error> {
         let mut key_dilution = self.key_dilution;
         if key_dilution == 0 {
