@@ -13,7 +13,7 @@ use crate::crypto::{self, hashable::Hashable};
 use crate::protocol;
 
 /// Delegation status of an account's MicroAlgos.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Status {
     /// Indicates that the associated account receives rewards but does not participate in the consensus.
     Offline,
@@ -90,7 +90,7 @@ impl TryFrom<&str> for Status {
 ///
 /// This includes the account balance, cryptographic public keys,
 /// consensus delegation status, asset data, and application data.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct AccountData {
     pub status: Status,
     pub micro_algos: MicroAlgos,
@@ -195,14 +195,14 @@ pub struct AccountData {
 /// It also stores a cached copy of the application's LocalStateSchema so that MinBalance requirements may be computed:
 ///   1) without looking up the AppParams, and
 ///   2) even if the application has been deleted
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AppLocalState {
     pub schema: StateSchema,
     pub key_value: TealKeyValue,
 }
 
 /// Stores the global information associated with an application.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AppParams {
     pub approval_program: Vec<u8>,
     pub clear_state_program: Vec<u8>,
@@ -212,7 +212,7 @@ pub struct AppParams {
 }
 
 /// Thin wrapper around the LocalStateSchema and the GlobalStateSchema, since they are often needed together.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct StateSchemas {
     pub local_state_schema: StateSchema,
     pub global_state_schema: StateSchema,
@@ -268,7 +268,7 @@ pub type AssetIndex = u64;
 
 /// Unique integer index of an application that can be used to look up the creator of the application,
 /// whose balance record contains the AppParams.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AppIndex(pub u64);
 
 /// Represents either an AssetIndex or AppIndex, which come from the same namespace of indices as each other
@@ -297,7 +297,7 @@ pub struct CreatableLocator {
 }
 
 /// Describes an asset held by an account.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AssetHolding {
     pub amount: u64,
     pub frozen: bool,
@@ -371,7 +371,7 @@ impl AccountData {
     /// Returns the amount of MicroAlgos associated with the user's account.
     fn money(
         &self,
-        proto: config::ConsensusParams,
+        proto: &config::ConsensusParams,
         rewards_level: u64,
     ) -> (MicroAlgos, MicroAlgos) {
         let e = self.with_updated_rewards(proto, rewards_level);
@@ -387,32 +387,28 @@ impl AccountData {
         rewards_base: u64,
         rewards_level: u64,
     ) -> MicroAlgos {
-        let rewards_units = micro_algos.reward_units(proto);
+        let rewards_units = micro_algos.reward_units(&proto);
         let rewards_delta = rewards_level - rewards_base;
         MicroAlgos(rewards_units * rewards_delta)
     }
 
     /// Returns an updated number of algos in an AccountData to reflect rewards up to some rewards level.
-    // TODO track overflow? (see go-algorand)
     // TODO should copy self, or is it fine to mutate?
     fn with_updated_rewards(
         &self,
-        proto: config::ConsensusParams,
+        proto: &config::ConsensusParams,
         rewards_level: u64,
     ) -> AccountData {
         let mut ad = self.clone();
         if ad.status != Status::NotParticipating {
-            let rewards_units = ad.micro_algos.reward_units(proto);
+            let rewards_units = ad.micro_algos.reward_units(&proto);
             let rewards_delta = rewards_level - ad.rewards_base;
             let rewards = MicroAlgos(rewards_units * rewards_delta);
             ad.micro_algos = MicroAlgos(ad.micro_algos.0 + rewards.0);
-            /*if ot.Overflowed {
-                logging.Base().Panicf("AccountData.WithUpdatedRewards(): overflowed account balance when applying rewards %v + %d*(%d-%d)", u.MicroAlgos, rewardsUnits, rewardsLevel, u.RewardsBase)
-            }*/
             ad.rewards_base = rewards_level;
             // The total reward over the lifetime of the account could exceed a 64-bit value. As a result
-            // this rewardAlgos counter could potentially roll over.
-            ad.rewarded_micro_algos = MicroAlgos(ad.rewarded_micro_algos.0 + rewards.0);
+            // this reward_algos counter could potentially roll over.
+            ad.rewarded_micro_algos = MicroAlgos(ad.rewarded_micro_algos.0.wrapping_add(rewards.0));
         }
 
         ad
@@ -544,6 +540,7 @@ impl AccountData {
 }
 
 /// Pairs an account's address with its associated data.
+#[derive(Default, Serialize, Deserialize)]
 struct BalanceRecord {
     pub addr: Address,
     pub account_data: AccountData,
@@ -554,5 +551,130 @@ impl Hashable for BalanceRecord {
         // TODO implement protocol::codec
         //(protocol::BALANCE_RECORD, protocol::encode(&self))
         (protocol::BALANCE_RECORD, Vec::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::basics::MicroAlgos;
+
+    // TODO add again once encode is fixed for ommitting empty values
+    /*
+    #[test]
+    fn empty_encoding() {
+        let ub = BalanceRecord::default();
+        assert_eq!(protocol::encode(&ub).len(), 1);
+    }
+    */
+
+    #[test]
+    fn rewards() {
+        let proto = &config::CONSENSUS.0[&protocol::CURRENT_CONSENSUS_VERSION];
+        let account_algos = vec![
+            MicroAlgos(0),
+            MicroAlgos(8000),
+            MicroAlgos(13000),
+            MicroAlgos(83000),
+        ];
+        for algos in account_algos {
+            let ad = AccountData {
+                status: Status::Online,
+                micro_algos: algos,
+                rewards_base: 100,
+                rewarded_micro_algos: MicroAlgos(25),
+                ..Default::default()
+            };
+
+            let levels = vec![0, 1, 30, 3000];
+            for level in levels {
+                let (money, rewards) = ad.money(proto, ad.rewards_base + level);
+                assert_eq!(
+                    money.0,
+                    ad.micro_algos.0 + level * ad.micro_algos.reward_units(proto)
+                );
+                assert_eq!(
+                    rewards.0,
+                    ad.rewarded_micro_algos.0 + level * ad.micro_algos.reward_units(proto)
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn with_updated_rewards_overflow() {
+        let proto = &config::CONSENSUS.0[&protocol::CURRENT_CONSENSUS_VERSION];
+        let a = AccountData {
+            status: Status::Online,
+            micro_algos: MicroAlgos(!0),
+            rewarded_micro_algos: MicroAlgos(0),
+            rewards_base: 0,
+            ..Default::default()
+        };
+        a.with_updated_rewards(proto, 100);
+    }
+
+    #[test]
+    fn with_updated_rewards_wrapping() {
+        let proto = &config::CONSENSUS.0[&protocol::CURRENT_CONSENSUS_VERSION];
+        let a = AccountData {
+            status: Status::Online,
+            micro_algos: MicroAlgos(80_000_000),
+            rewarded_micro_algos: MicroAlgos(!0),
+            rewards_base: 0,
+            ..Default::default()
+        };
+        let b = a.with_updated_rewards(proto, 100);
+        assert_eq!(
+            b.rewarded_micro_algos.0,
+            100 * a.micro_algos.reward_units(proto) - 1
+        );
+    }
+
+    // TODO port TestEncodedAccountDataSize from go-algorand once encoding works
+
+    #[test]
+    fn encoded_account_allocation_bounds() {
+        // ensure that all the supported protocols have value limits less or
+        // equal to their corresponding codec allocbounds
+        for (proto_ver, proto) in &config::CONSENSUS.0 {
+            if proto.max_assets_per_account as u64 > MAX_ENCODED_ASSETS_PER_ACCOUNT as u64 {
+                panic!("failed for protocol version {}", proto_ver)
+            }
+            if proto.max_apps_created as u64 > MAX_ENCODED_APP_PARAMS as u64 {
+                panic!("failed for protocol version {}", proto_ver)
+            }
+            if proto.max_apps_opted_in as u64 > MAX_ENCODED_APP_LOCAL_STATES as u64 {
+                panic!("failed for protocol version {}", proto_ver)
+            }
+            if proto.max_local_schema_entries as u64 > MAX_ENCODED_KEY_VALUE_ENTRIES as u64 {
+                panic!("failed for protocol version {}", proto_ver)
+            }
+            if proto.max_global_schema_entries as u64 > MAX_ENCODED_KEY_VALUE_ENTRIES as u64 {
+                panic!("failed for protocol version {}", proto_ver)
+            }
+        }
+    }
+
+    #[test]
+    fn app_index_hashing() {
+        let i = AppIndex(12);
+        let (prefix, buf) = i.to_be_hashed();
+        assert_eq!(prefix, protocol::APP_INDEX);
+        assert_eq!(buf, vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c]);
+
+        let i = AppIndex(12 << 16);
+        let (prefix, buf) = i.to_be_hashed();
+        assert_eq!(prefix, protocol::APP_INDEX);
+        assert_eq!(buf, vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00]);
+
+        // test value created with:
+        // python -c "import algosdk.encoding as e; print(e.encode_address(e.checksum(b'appID'+($APPID).to_bytes(8, 'big'))))"
+        let i = AppIndex(77);
+        assert_eq!(
+            i.address().to_string(),
+            "PCYUFPA2ZTOYWTP43MX2MOX2OWAIAXUDNC2WFCXAGMRUZ3DYD6BWFDL5YM",
+        );
     }
 }

@@ -1,8 +1,6 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
-use tempfile::{Builder, TempDir};
-
 use super::*;
 
 const TESTDIR: &'static str = "testdir_iKywQ1m8eeAVRwURWaR0zQMLIdXSoqfpZlo8Wsuz";

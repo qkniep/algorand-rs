@@ -96,7 +96,6 @@ func (stx SignedTxn) equal(o SignedTxn) bool {
     defer protocol.PutEncodingBuf(oenc)
     return bytes.Equal(stxenc, oenc)
 }
-*/
 
 #[cfg(test)]
 mod tests {
@@ -105,3 +104,4 @@ mod tests {
     #[test]
     fn it_works() {}
 }
+*/

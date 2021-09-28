@@ -32,7 +32,7 @@ impl MicroAlgos {
 
     /// The number of reward units in some number of algos.
     // TODO better doc comment
-    pub fn reward_units(&self, proto: config::ConsensusParams) -> u64 {
+    pub fn reward_units(&self, proto: &config::ConsensusParams) -> u64 {
         self.0 / proto.reward_unit
     }
 

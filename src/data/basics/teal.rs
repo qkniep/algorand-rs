@@ -161,7 +161,7 @@ impl StateSchema {
 }
 
 /// Enum of the types in a TEAL program: Bytes and Uint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TealType {
     /// Represents the type of a byte slice in a TEAL program.
     Bytes,
@@ -181,7 +181,7 @@ impl fmt::Display for TealType {
 
 /// Contains type information and a value, representing a value in a TEAL program.
 // TODO make this an enum (or will that break codec compatibility with go-algorand?)
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TealValue {
     pub teal_type: TealType,
     pub bytes: Vec<u8>,
@@ -233,7 +233,7 @@ impl fmt::Display for TealValue {
 
 /// Represents a key/value store for use in an application's local or global state.
 //msgp:allocbound TealKeyValue EncodedMaxKeyValueEntries
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TealKeyValue(HashMap<String, TealValue>);
 
 impl TealKeyValue {
