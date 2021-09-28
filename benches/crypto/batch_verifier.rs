@@ -9,16 +9,15 @@ use algorsand::crypto::batch_verifier::*;
 
 pub fn batch_verifier(c: &mut Criterion) {
     let kp = Keypair::generate(&mut OsRng {});
-    let mut bv = BatchVerifier::with_capacity(1);
 
     c.bench_function("batch_verifier::enque_sig", |b| {
+        let mut bv = BatchVerifier::with_capacity(1);
         b.iter_with_setup(
             || random_string(),
             |s| bv.enque_sig(kp.public, &s, kp.sign(&s)),
-        )
+        );
+        assert!(bv.verify().is_ok());
     });
-
-    assert!(bv.verify().is_ok());
 }
 
 fn random_string() -> Vec<u8> {
