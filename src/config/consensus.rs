@@ -377,12 +377,12 @@ impl Default for PaysetCommitType {
 
 /// Defines a set of supported protocol versions and their
 /// corresponding parameters.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ConsensusProtocols(pub HashMap<protocol::ConsensusVersion, ConsensusParams>);
 
 lazy_static! {
     pub static ref CONSENSUS: ConsensusProtocols = {
-        let mut cp = ConsensusProtocols::new();
+        let mut cp = ConsensusProtocols::default();
         init_consensus_protocols(&mut cp);
         load_configurable_consensus_protocols(".", &mut cp).unwrap();
         for (_, p) in cp.0.iter_mut() {
@@ -493,7 +493,7 @@ pub fn save_configurable_consensus(data_dir: &str, params: ConsensusProtocols) -
     let consensus_protocol_path =
         Path::new(data_dir).join(super::CONFIGURABLE_CONSENSUS_PROTOCOLS_FILENAME);
 
-    if params.len() == 0 {
+    if params.is_empty() {
         // We have no consensus params to write.
         // In this case, delete the existing file (if any).
         std::fs::remove_file(&consensus_protocol_path)?;
@@ -510,12 +510,12 @@ pub fn save_configurable_consensus(data_dir: &str, params: ConsensusProtocols) -
 }
 
 impl ConsensusProtocols {
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.len() == 0
     }
 
     /// Merges a configurable consensus ontop of the existing consensus protocol.
@@ -575,7 +575,7 @@ pub fn load_configurable_consensus_protocols(
     consensus: &mut ConsensusProtocols,
 ) -> Result<()> {
     let new_consensus = preload_configurable_consensus_protocols(data_dir, consensus)?;
-    if new_consensus.len() > 0 {
+    if !new_consensus.is_empty() {
         *consensus = new_consensus;
         // Set allocation limits
         for p in consensus.0.values() {

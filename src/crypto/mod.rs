@@ -4,6 +4,7 @@
 pub mod batch_verifier;
 pub mod hashable;
 pub mod merklearray;
+pub mod merkletrie;
 pub mod mnemonic;
 pub mod multisig;
 pub mod ots;
@@ -13,6 +14,8 @@ pub use ed25519::{Signature, SIGNATURE_LENGTH};
 pub use ed25519_dalek::Keypair;
 
 pub use hashable::*;
+pub use merklearray::*;
+pub use merkletrie::*;
 pub use multisig::*;
 pub use ots::*;
 pub use vrf::*;

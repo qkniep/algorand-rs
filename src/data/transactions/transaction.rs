@@ -98,7 +98,7 @@ pub struct ApplyData {
     pub close_rewards: basics::MicroAlgos,
     pub eval_delta: EvalDelta,
 
-    // If asa or app is being created, the id used. Else 0.
+    // If asset or app is being created, the id used. Else 0.
     // Names chosen to match naming the corresponding txn.
     // These are populated on when MaxInnerTransactions > 0 (TEAL 5)
     pub config_asset: basics::AssetIndex,

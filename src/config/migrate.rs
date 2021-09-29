@@ -109,6 +109,7 @@ pub fn migrate(config: Local) -> Result<Local, MigrationError> {
 }
 
 fn get_latest_config_version() -> u32 {
+    /*
     localType := reflect.TypeOf(Local{})
     versionField, found := localType.FieldByName("Version")
     if !found {
@@ -122,6 +123,7 @@ fn get_latest_config_version() -> u32 {
         }
         version++
     }
+    */
 }
 
 fn get_versioned_default_local_config(version: u32) -> Local {

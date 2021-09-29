@@ -188,7 +188,7 @@ impl MultisigSignature {
     }
 
     fn verify(&self, msg: &[u8], addr: &MultisigAddr) -> Result<bool, MultisigError> {
-        let mut batch_verifier = BatchVerifier::new();
+        let mut batch_verifier = BatchVerifier::default();
 
         if !self.batch_verify(msg, addr, &mut batch_verifier)? {
             Ok(false)

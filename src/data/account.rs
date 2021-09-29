@@ -4,6 +4,7 @@
 use lazy_static::lazy_static;
 use rand::{rngs::OsRng, RngCore};
 use sled::Db;
+use thiserror::Error;
 
 use crate::config;
 use crate::crypto;
@@ -48,9 +49,21 @@ pub struct Participation {
     pub key_dilution: u64,
 }
 
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("did not find a matching object in storage")]
+    NotFound,
+    #[error("invalid round interval ({0}-{1})")]
+    InvalidRoundInterval(basics::Round, basics::Round),
+    #[error("failed to access account storage")]
+    StorageError(#[from] sled::Error),
+    #[error("failed to decode data type")]
+    DecodeError(#[from] rmp_serde::decode::Error),
+}
+
 impl Root {
     /// Generate new account from system's source of randomness.
-    pub fn generate() -> Result<Root, sled::Error> {
+    pub fn generate() -> Result<Root, Error> {
         let mut seed = [0; 32];
         let mut rng = OsRng {};
         rng.fill_bytes(&mut seed);
@@ -58,7 +71,7 @@ impl Root {
     }
 
     /// Instantiate a key based on the given seed.
-    fn import(seed: [u8; 32]) -> Result<Root, sled::Error> {
+    fn import(seed: [u8; 32]) -> Result<Root, Error> {
         let kp = crypto::Keypair::from_bytes(&seed).unwrap();
         let raw = protocol::encode(&kp);
 
@@ -69,18 +82,15 @@ impl Root {
     }
 
     /// Restores a Root from a database handle.
-    pub fn restore() -> Result<Root, sled::Error> {
+    pub fn restore() -> Result<Root, Error> {
         let res = KEY_STORE.get("root")?;
         if res.is_none() {
-            //err = fmt.Errorf("RestoreRoot: error decoding account: %v", err)
+            return Err(Error::NotFound);
         }
 
-        let kp = protocol::decode(&res.unwrap());
-        if kp.is_err() {
-            //err = fmt.Errorf("RestoreRoot: error decoding account: %v", err)
-        }
+        let kp = protocol::decode(&res.unwrap())?;
 
-        Ok(Root { kp: kp.unwrap() })
+        Ok(Root { kp })
     }
 
     /// Secrets returns the signing secrets associated with the Root account.
@@ -163,7 +173,7 @@ impl Participation {
         )
     }
 
-    pub fn restore() -> Result<Participation, ()> {
+    pub fn restore() -> Result<Participation, Error> {
         /*
         err = Migrate(store)
         if err != nil {
@@ -178,7 +188,7 @@ impl Participation {
         copy(acc.Parent[:32], rawParent)
         return acc, nil
         */
-        Err(())
+        Err(Error::NotFound)
     }
 
     /// Securely deletes ephemeral keys for rounds strictly older than the given round.
@@ -186,7 +196,7 @@ impl Participation {
         &mut self,
         current: basics::Round,
         proto: &config::ConsensusParams,
-    ) -> Result<(), sled::Error> {
+    ) -> Result<(), Error> {
         let mut key_dilution = self.key_dilution;
         if key_dilution == 0 {
             key_dilution = proto.default_key_dilution;
@@ -201,7 +211,7 @@ impl Participation {
     }
 
     /// Writes a new parent address to the partkey database.
-    pub fn persist_new_parent(&self) -> Result<(), sled::Error> {
+    pub fn persist_new_parent(&self) -> Result<(), Error> {
         KEY_STORE.insert("part-parent", &self.parent.0[..])?;
         Ok(())
     }
@@ -212,10 +222,9 @@ impl Participation {
         first_valid: basics::Round,
         last_valid: basics::Round,
         key_dilution: u64,
-    ) -> Result<Participation, ()> {
+    ) -> Result<Participation, Error> {
         if last_valid < first_valid {
-            //fmt.Errorf("FillDBWithParticipationKeys: lastValid %d is after firstValid %d", lastValid, firstValid)
-            return Err(());
+            return Err(Error::InvalidRoundInterval(first_valid, last_valid));
         }
 
         // Compute how many distinct participation keys we should generate
@@ -248,7 +257,7 @@ impl Participation {
     }
 
     /// Persist writes a Participation out to a database on the disk
-    pub fn persist(&self) -> Result<(), sled::Error> {
+    pub fn persist(&self) -> Result<(), Error> {
         let vrf_enc = protocol::encode(&self.vrf);
         let voting = self.voting.snapshot();
         let voting_enc = protocol::encode(&voting);

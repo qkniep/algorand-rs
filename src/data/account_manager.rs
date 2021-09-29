@@ -14,25 +14,25 @@ use crate::protocol;
 /// A ParticipationKeyIdentity defines the parameters that makes a pariticpation key unique.
 #[derive(Hash, PartialEq, Eq)]
 struct ParticipationKeyIdentity {
-	pub address: basics::Address, // the address this participation key is used to vote for.
+    pub address: basics::Address, // the address this participation key is used to vote for.
 
-	/// FirstValid and LastValid are inclusive.
-	pub first_valid: basics::Round,
-	pub last_valid: basics::Round,
+    /// FirstValid and LastValid are inclusive.
+    pub first_valid: basics::Round,
+    pub last_valid: basics::Round,
 
-	pub vote_id:     crypto::OTSVerifier,
-	pub selection_id: crypto::VrfPublicKey,
+    pub vote_id: crypto::OTSVerifier,
+    pub selection_id: crypto::VrfPublicKey,
 }
 
 /// AccountManager loads and manages accounts for the node
 #[derive(Default)]
 struct AccountManager {
-	mu: Mutex<()>,
+    mu: Mutex<()>,
 
-	part_keys: HashMap<ParticipationKeyIdentity, account::Participation>,
+    part_keys: HashMap<ParticipationKeyIdentity, account::Participation>,
 
-	/// Keeps track of accounts for which we've sent AccountRegistered telemetry events.
-	registered_accounts: HashSet<String>,
+    /// Keeps track of accounts for which we've sent AccountRegistered telemetry events.
+    registered_accounts: HashSet<String>,
 }
 
 impl AccountManager {
@@ -40,18 +40,19 @@ impl AccountManager {
     pub fn keys(&self, round: basics::Round) -> Vec<&account::Participation> {
         let _guard = self.mu.lock();
 
-        self.part_keys.values().filter(|p| {
-            p.overlaps_interval(round, round)
-        }).collect()
+        self.part_keys
+            .values()
+            .filter(|p| p.overlaps_interval(round, round))
+            .collect()
     }
 
     /// Returns true if we have any Participation keys valid for the specified round range (inclusive).
     pub fn has_live_keys(&self, from: basics::Round, to: basics::Round) -> bool {
         let _guard = self.mu.lock();
 
-        self.part_keys.values().any(|p| {
-            p.overlaps_interval(from, to)
-        })
+        self.part_keys
+            .values()
+            .any(|p| p.overlaps_interval(from, to))
     }
 
     /// Adds a new `account::Participation` to be managed.
@@ -66,13 +67,13 @@ impl AccountManager {
             address,
             first_valid,
             last_valid,
-            vote_id:      participation.voting.verifier,
+            vote_id: participation.voting.verifier,
             selection_id: participation.vrf.public(),
         };
 
         // Check if we already have participation keys for this address in this interval
         if self.part_keys.contains_key(&partkey_id) {
-            return false
+            return false;
         }
 
         self.part_keys.insert(partkey_id, participation);
@@ -96,7 +97,12 @@ impl AccountManager {
     }
 
     /// Deletes all accounts' ephemeral keys strictly older than the next round needed for each account.
-    pub fn delete_old_keys(&mut self, latest_header: bookkeeping::BlockHeader, cc_sigs: HashMap<basics::Address, basics::Round>, agreement_proto: config::ConsensusParams) {
+    pub fn delete_old_keys(
+        &mut self,
+        latest_header: bookkeeping::BlockHeader,
+        cc_sigs: HashMap<basics::Address, basics::Round>,
+        agreement_proto: config::ConsensusParams,
+    ) {
         let _guard = self.mu.lock();
         let latest_proto = config::CONSENSUS.0[&latest_header.current_protocol];
 
@@ -104,15 +110,20 @@ impl AccountManager {
             // We need a key for round r+1 for agreement.
             let next_round = latest_header.round + 1;
 
-            if latest_header.compact_cert[protocol::CompactCertType::Basic].compactcert_next_round > 0 {
+            if latest_header.compact_cert[protocol::CompactCertType::Basic].compactcert_next_round
+                > 0
+            {
                 // We need a key for the next compact cert round.
                 // This would be CompactCertNextRound+1 (+1 because compact
                 // cert code uses the next round's ephemeral key), except
                 // if we already used that key to produce a signature (as
                 // reported in ccSigs).
-                let mut next_cc = latest_header.compact_cert[protocol::CompactCertType::Basic].compactcert_next_round + 1;
+                let mut next_cc = latest_header.compact_cert[protocol::CompactCertType::Basic]
+                    .compactcert_next_round
+                    + 1;
                 if cc_sig.get(part.parent).unwrap() >= next_cc {
-                    next_cc = cc_sigs.get(part.parent).unwrap() + basics::Round(latest_proto.compactcert_rounds + 1);
+                    next_cc = cc_sigs.get(part.parent).unwrap()
+                        + basics::Round(latest_proto.compactcert_rounds + 1);
                 }
 
                 if next_cc < next_round {
@@ -123,7 +134,13 @@ impl AccountManager {
             // we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
             let (first, last) = part.valid_interval();
             if let Err(err) = part.delete_old_keys(next_round, agreement_proto) {
-                let err_str = format!("AccountManager.DeleteOldKeys(): key for {} ({}-{}), next_round {}", part.address().to_string(), first, last, next_round)
+                let err_str = format!(
+                    "AccountManager.DeleteOldKeys(): key for {} ({}-{}), next_round {}",
+                    part.address().to_string(),
+                    first,
+                    last,
+                    next_round
+                );
 
                 warn!("{}: {}", err_str, err);
             }
@@ -133,9 +150,8 @@ impl AccountManager {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+    use super::*;
 
-	#[test]
-	fn it_works() {
-	}
+    #[test]
+    fn it_works() {}
 }

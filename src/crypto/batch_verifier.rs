@@ -23,12 +23,6 @@ pub enum BatchVerError {
 }
 
 impl BatchVerifier {
-    // MakeBatchVerifierDefaultSize create a BatchVerifier instance. This function pre-allocates
-    // amount of free space to enqueue signatures without exapneding
-    pub fn new() -> Self {
-        Self::with_capacity(MIN_CAPACITY)
-    }
-
     // MakeBatchVerifier create a BatchVerifier instance. This function pre-allocates
     // a given space so it will not expaned the storage
     pub fn with_capacity(capacity: usize) -> Self {
@@ -69,6 +63,14 @@ impl BatchVerifier {
         }
 
         Ok(())
+    }
+}
+
+impl Default for BatchVerifier {
+    // Create a BatchVerifier instance.
+    // This function pre-allocates amount of free space to enqueue signatures without exapneding
+    fn default() -> Self {
+        Self::with_capacity(MIN_CAPACITY)
     }
 }
 
@@ -136,7 +138,7 @@ mod tests {
 
     #[test]
     fn empty_batch() {
-        let bv = BatchVerifier::new();
+        let bv = BatchVerifier::default();
         assert_eq!(bv.verify(), Err(BatchVerError::ZeroTranscationsInBatch));
     }
 
