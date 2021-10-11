@@ -2,5 +2,13 @@
 // Distributed under terms of the MIT license.
 
 mod bitset;
+mod cache;
+mod node;
+mod storage;
+mod trie;
 
-use bitset::*;
+pub use bitset::*;
+use cache::*;
+pub use node::*;
+pub use storage::*;
+pub use trie::*;

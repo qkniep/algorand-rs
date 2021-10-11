@@ -15,6 +15,7 @@ dependencies = [
  "ed25519",
  "ed25519-dalek",
  "generic-array",
+ "integer-encoding",
  "lazy_static",
  "maplit",
  "rand 0.7.3",
@@ -518,6 +519,12 @@ checksum = "716d3d89f35ac6a34fd0eed635395f4c3b76fa889338a4632e5231a8684216bd"
 dependencies = [
  "cfg-if",
 ]
+
+[[package]]
+name = "integer-encoding"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90c11140ffea82edce8dcd74137ce9324ec24b3cf0175fc9d7e29164da9915b8"
 
 [[package]]
 name = "itertools"

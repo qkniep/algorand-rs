@@ -6,7 +6,7 @@
 
 /// A 256-bits bitmask storage.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Bitset {
+pub struct Bitset {
     data: [u64; 4],
 }
 

@@ -15,7 +15,7 @@ use crate::protocol;
 pub const HASH_LEN: usize = 32;
 
 /// Represents a 32-byte (256-bit) value holding a hash digest.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CryptoHash(pub [u8; HASH_LEN]);
 
 #[derive(Error, Debug)]
