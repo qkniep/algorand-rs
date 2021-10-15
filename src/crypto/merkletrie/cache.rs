@@ -70,7 +70,7 @@ impl MerkleTrieCache {
         let mut buf = Vec::new();
         node.serialize(&mut buf);
         self.cache.insert(id, node);
-        self.storage.store_node(id, &buf);
+        self.storage.store_node(id, &buf)?;
         Ok(())
     }
 

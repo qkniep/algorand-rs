@@ -11,9 +11,8 @@ use crate::crypto::hashable::{hash, HASH_LEN};
 
 #[derive(Clone, Debug, Default)]
 pub struct Node {
-    /// ID to find parent node in memory/storage (None for root node).
-    pub parent: Option<NodeID>,
     /// Makes root calculation more efficient by not recalculating hashes of unchanged subtrees.
+    // TODO check hash.len() < 32 instead???
     pub dirty: bool,
     pub hash: Vec<u8>,
     pub children: Option<[Option<NodeID>; 256]>,
@@ -54,86 +53,67 @@ impl Node {
                 idiff += 1;
             }
 
-            let (mut cur_child_node, cur_child_node_id) = cache.allocate_new_node();
+            // TODO do not `allocate_new_node` where go-algorand uses `refurbishNode`,
+            //      instead just update the node via `set_node`.
+            let (mut cur_child_node, cur_child_id) = cache.allocate_new_node();
             cur_child_node.hash = self.hash[idiff + 1..].to_vec();
-            cache.set_node(cur_child_node_id, cur_child_node)?;
+            cache.set_node(cur_child_id, cur_child_node)?;
 
-            let (mut new_child_node, new_child_node_id) = cache.allocate_new_node();
+            let (mut new_child_node, new_child_id) = cache.allocate_new_node();
             new_child_node.hash = d[idiff + 1..].to_vec();
-            cache.set_node(new_child_node_id, new_child_node)?;
+            cache.set_node(new_child_id, new_child_node)?;
 
-            let (mut pnode, mut node_id) = cache.allocate_new_node();
+            let (mut pnode, mut id) = cache.allocate_new_node();
 
-            pnode.parent = self.parent;
             pnode.dirty = true;
-            let mut children = [None; 256];
-            children[usize::from(d[idiff])] = Some(new_child_node_id);
-            children[usize::from(self.hash[idiff])] = Some(cur_child_node_id);
-            pnode.children = Some(children);
-            //pnode.children = Some([None; 256]);
-            //pnode.children.unwrap()[usize::from(d[idiff])] = Some(new_child_node_id);
-            //pnode.children.unwrap()[usize::from(self.hash[idiff])] = Some(cur_child_node_id);
+            pnode.children = Some([None; 256]);
+            pnode.children.as_mut().unwrap()[usize::from(d[idiff])] = Some(new_child_id);
+            pnode.children.as_mut().unwrap()[usize::from(self.hash[idiff])] = Some(cur_child_id);
             pnode.hash = [path, &d[..idiff]].concat().to_vec();
-            cache.set_node(node_id, pnode.clone())?;
+            cache.set_node(id, pnode.clone())?;
 
             for i in (0..idiff).rev() {
                 // create a parent node for pnode.
-                let (mut pnode2, node_id2) = cache.allocate_new_node();
-                let tmp_parent = pnode.parent;
-                pnode.parent = Some(node_id2);
-                pnode2.parent = tmp_parent;
+                let (mut pnode2, id2) = cache.allocate_new_node();
                 pnode2.dirty = true;
                 pnode2.children = Some([None; 256]);
-                pnode2.children.unwrap()[usize::from(d[i])] = Some(node_id);
+                pnode2.children.as_mut().unwrap()[usize::from(d[i])] = Some(id);
                 pnode2.hash = [path, &d[..i]].concat().to_vec();
+                cache.set_node(id2, pnode2)?;
 
-                cache.set_node(node_id, pnode)?;
-                cache.set_node(node_id2, pnode2.clone())?;
-
-                pnode = pnode2;
-                node_id = node_id2;
+                id = id2;
             }
-            return Ok(node_id);
+            return Ok(id);
         }
 
-        let (mut pnode, node_id) =
-            if self.children.is_none() || self.children.unwrap()[usize::from(d[0])].is_none() {
-                // no such child.
-                let (mut child_node, child_node_id) = cache.allocate_new_node();
-                child_node.hash = d[1..].to_vec();
-                cache.set_node(child_node_id, child_node)?;
+        let (mut pnode, id) = if self.children.unwrap()[usize::from(d[0])].is_none() {
+            // no such child.
+            let (mut child_node, child_id) = cache.allocate_new_node();
+            child_node.hash = d[1..].to_vec();
+            cache.set_node(child_id, child_node)?;
 
-                let (mut pnode, node_id) = cache.allocate_new_node();
-                pnode.parent = self.parent;
-                pnode.dirty = true;
-                let mut children = self.children.clone().unwrap_or([None; 256]);
-                children[usize::from(d[0])] = Some(child_node_id);
-                pnode.children = Some(children);
-                (pnode, node_id)
-            } else {
-                // there is already a child there.
-                let cur_node_id = self.children.unwrap()[usize::from(d[0])].unwrap();
-                let child_node = cache.get_node(cur_node_id)?.clone();
-                let updated_child = child_node.add(cache, &d[1..], &[path, &[d[0]]].concat())?;
+            let (mut pnode, id) = cache.allocate_new_node();
+            pnode.dirty = true;
+            pnode.children = self.children.clone();
+            pnode.children.as_mut().unwrap()[usize::from(d[0])] = Some(child_id);
+            (pnode, id)
+        } else {
+            // there is already a child there.
+            let cur_id = self.children.unwrap()[usize::from(d[0])].unwrap();
+            let mut child_node = cache.get_node(cur_id)?.clone();
+            let updated_child = child_node.add(cache, &d[1..], &[path, &[d[0]]].concat())?;
 
-                let (mut pnode, node_id) = cache.allocate_new_node();
-                pnode.parent = self.parent;
-                pnode.dirty = true;
-                let mut children = self.children.clone().unwrap();
-                children[usize::from(d[0])] = Some(updated_child);
-                pnode.children = Some(children);
-                (pnode, node_id)
-            };
+            child_node.dirty = true;
+            child_node.children = self.children.clone();
+            child_node.children.as_mut().unwrap()[usize::from(d[0])] = Some(updated_child);
+            (child_node, cur_id)
+        };
         pnode.hash = path.to_vec();
-        cache.set_node(node_id, pnode)?;
-        Ok(node_id)
+        cache.set_node(id, pnode)?;
+        Ok(id)
     }
 
-    /// Calculate the hash of the non-leaf nodes when this function is called,
-    // the hashes of all the child node are expected to have been calculated already.
-    // This is achieved by doing the following:
-    //   1. all node id allocations are done in incremental monolitic order, from the bottom up
-    //   2. hash calculations are being doing in node id incremental ordering
+    /// Calculate the hash of the dirty non-leaf nodes when this function is called,
     pub fn calculate_hash(&mut self, cache: &mut MerkleTrieCache) -> Result<(), CacheError> {
         thread_local! {
             static HASH_BUF: RefCell<Vec<u8>> = RefCell::new(Vec::with_capacity(HASH_LEN * 256));
@@ -183,7 +163,7 @@ impl Node {
         })
     }
 
-    /// Removes an element from the sub-trie function remove is called only on non-leaf nodes.
+    /// Removes an element from the subtrie (only called on non-leaf nodes).
     /// Assumption: We know that the key is already included in the tree.
     pub fn remove(
         &self,
@@ -192,28 +172,28 @@ impl Node {
         path: &[u8],
     ) -> Result<NodeID, CacheError> {
         // allocate a new node to replace the current one.
-        let child_id = self.children.unwrap()[usize::from(key[0])].unwrap();
-        let child_node = cache.get_node(child_id)?.clone();
-        let (mut pnode, node_id) = if child_node.is_leaf() {
-            let (pnode, node_id) = cache.allocate_new_node();
-            pnode.children.unwrap()[usize::from(key[0])] = None;
-            (pnode, node_id)
+        let nid = self.children.unwrap()[usize::from(key[0])].unwrap();
+        let mut node = cache.get_node(nid)?.clone();
+        if node.is_leaf() {
+            node.children = self.children.clone();
+            node.children.as_mut().unwrap()[usize::from(key[0])] = None;
         } else {
-            let updated_child_node_id =
-                child_node.remove(cache, &key[1..], &[path, &[key[0]]].concat())?;
+            let updated_child_id = node.remove(cache, &key[1..], &[path, &[key[0]]].concat())?;
 
-            let (mut pnode, node_id) = cache.allocate_new_node();
-            pnode.children = self.children.clone();
-            pnode.children.unwrap()[usize::from(key[0])] = Some(updated_child_node_id);
-            (pnode, node_id)
+            node.children = self.children.clone();
+            node.children.as_mut().unwrap()[usize::from(key[0])] = Some(updated_child_id);
         };
 
+        // find the only child, if there is only one
         let (mut hash_idx, mut child_id, mut num_children) = (0, 0, 0);
-        for (i, id) in pnode.children.unwrap().iter().enumerate() {
+        for (i, id) in node.children.unwrap().iter().enumerate() {
             if let Some(cid) = id {
                 hash_idx = i;
                 child_id = *cid;
                 num_children += 1;
+                if num_children > 1 {
+                    break;
+                }
             }
         }
 
@@ -222,41 +202,37 @@ impl Node {
             let child_node = cache.get_node(child_id)?;
             if child_node.is_leaf() {
                 // convert current node into a leaf.
-                pnode.hash = [&[hash_idx as u8], child_node.hash.as_slice()].concat();
+                node.hash = [&[hash_idx as u8], child_node.hash.as_slice()].concat();
                 cache.delete_node(child_id);
-                pnode.children = None;
+                node.children = None;
+                node.dirty = false;
             }
         }
-        if !pnode.is_leaf() {
-            pnode.hash = path.to_vec();
+        if !node.is_leaf() {
+            node.hash = path.to_vec();
+            node.dirty = true;
         }
-        Ok(node_id)
+
+        cache.set_node(nid, node)?;
+        Ok(nid)
     }
 
     /// Serializes the content of the node into the buffer.
-    /// Returns the number of bytes written in the process.
-    pub fn serialize(&self, buf: &mut Vec<u8>) -> i32 {
-        let mut w = buf.write_varint(self.hash.len() as u64).unwrap();
+    pub fn serialize(&self, buf: &mut Vec<u8>) {
+        buf.write_varint(self.hash.len() as u64).unwrap();
         buf.extend_from_slice(&self.hash);
-        w += self.hash.len();
         if self.is_leaf() {
-            buf.push(0); // leaf
-            return w as i32 + 1;
+            buf.push(0);
+            return;
         }
-        // non-leaf
-        buf.push(1); // non-leaf
-        w += 1;
-        // store all the children, and terminate with a null.
-        for (hash_idx, child_id) in self.children.unwrap().iter().enumerate() {
+
+        buf.push(1);
+        for (i, child_id) in self.children.unwrap().iter().enumerate() {
             if let Some(cid) = child_id {
-                buf.push(hash_idx as u8);
-                w += 1;
-                let x = buf.write_varint(*cid).unwrap();
-                w += x;
+                buf.push(i as u8);
+                buf.write_varint(*cid).unwrap();
             }
         }
-        //buf[w] = self.children.unwrap().last().unwrap().hash_index;
-        w as i32 + 1
     }
 
     /// Deserializes a node from a byte slice.
@@ -265,23 +241,30 @@ impl Node {
         let mut n = Node::default();
         let hash_length = cursor.read_varint().ok()?;
         n.hash = vec![0; hash_length];
-        cursor.read_exact(&mut n.hash);
+        cursor.read_exact(&mut n.hash).ok()?;
         let mut is_inner = 0_u8;
-        cursor.read_exact(std::slice::from_mut(&mut is_inner));
-        if is_inner == 0 {
-            return None;
-        }
-        n.children = Some([None; 256]);
-        let mut child_index = 0_u8;
-        while cursor.position() < buf.len() as u64 {
-            cursor.read_exact(std::slice::from_mut(&mut child_index));
-            let node_id = cursor.read_varint().ok()?;
-            n.children.unwrap()[usize::from(child_index)] = Some(node_id);
+        cursor
+            .read_exact(std::slice::from_mut(&mut is_inner))
+            .ok()?;
+        if is_inner == 1 {
+            n.children = Some([None; 256]);
+            let mut child_index = 0_u8;
+            while cursor.position() < buf.len() as u64 {
+                cursor
+                    .read_exact(std::slice::from_mut(&mut child_index))
+                    .ok()?;
+                let id = cursor.read_varint().ok()?;
+                n.children.as_mut().unwrap()[usize::from(child_index)] = Some(id);
+            }
         }
         Some(n)
     }
 
     pub fn get_child_count(&self) -> u64 {
+        if self.children.is_none() {
+            return 0;
+        }
+
         let mut num_children = 0;
         for id in &self.children.unwrap() {
             if id.is_some() {
@@ -292,41 +275,47 @@ impl Node {
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use std::collections::VecDeque;
+
     #[test]
     fn node_serialization() {
-        let mc InMemoryCommitter
-        memConfig := defaultTestMemoryConfig
-        memConfig.CachedNodesCount = 1000
-        mt1, _ := MakeTrie(&memoryCommitter, memConfig)
-        // create 1024 hashes.
-        leafsCount := 1024
-        hashes := make([]crypto.Digest, leafsCount)
-        for i := 0; i < len(hashes); i++ {
-            hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
+        let storage = InMemoryStorage::default();
+        let mut trie = Trie::new(storage);
+
+        // insert 1024 hashes.
+        let leaves = 1024;
+        for i in 0..leaves {
+            let h = hash(&[(i % 256) as u8, ((i / 256) % 256) as u8, (i / 65536) as u8]);
+            trie.add(&h.0).unwrap();
         }
 
-        for i := 0; i < len(hashes); i++ {
-            mt1.Add(hashes[i][:])
-        }
-        for _, page := range mt1.cache.pageToNIDsPtr {
-            for _, pnode := range page {
-                buf := make([]byte, 10000)
-                consumedWrite := pnode.serialize(buf[:])
-                outNode, consumedRead := deserializeNode(buf[:])
-                require.Equal(t, consumedWrite, consumedRead)
-                require.Equal(t, pnode.leaf(), outNode.leaf())
-                require.Equal(t, len(pnode.children), len(outNode.children))
-                reencodedBuffer := make([]byte, 10000)
-                renecodedConsumedWrite := outNode.serialize(reencodedBuffer[:])
-                require.Equal(t, consumedWrite, renecodedConsumedWrite)
-                require.Equal(t, buf, reencodedBuffer)
+        let mut to_visit: VecDeque<NodeID> = vec![trie.root.unwrap()].into();
+        while !to_visit.is_empty() {
+            let mut buf = Vec::new();
+            let id = to_visit.pop_front().unwrap();
+            let node = trie.cache.get_node(id).unwrap();
+
+            node.serialize(&mut buf);
+            let out_node = Node::deserialize(&buf).unwrap();
+            assert_eq!(node.is_leaf(), out_node.is_leaf());
+            assert_eq!(node.get_child_count(), out_node.get_child_count());
+
+            let mut buf2 = Vec::new();
+            out_node.serialize(&mut buf2);
+            assert_eq!(buf.len(), buf2.len());
+            assert_eq!(buf, buf2);
+
+            if let Some(children) = node.children {
+                for child_id in children {
+                    if let Some(id) = child_id {
+                        to_visit.push_back(id);
+                    }
+                }
             }
         }
     }
 }
-*/

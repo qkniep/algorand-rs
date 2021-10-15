@@ -1,7 +1,6 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
-use integer_encoding::{VarIntReader, VarIntWriter};
 use thiserror::Error;
 
 use super::*;
@@ -42,7 +41,7 @@ pub enum TrieError {
 /// Merkle trie intended to efficiently calculate the merkle root of unordered elements.
 pub struct Trie {
     pub root: Option<NodeID>,
-    cache: MerkleTrieCache,
+    pub cache: MerkleTrieCache,
     /// Size of the node values in bytes, all values must be the same size.
     /// This is set automatically upon insertion of the first node.
     element_length: u32,
@@ -88,8 +87,7 @@ impl Trie {
         }
 
         let pnode = self.cache.get_node(self.root.unwrap())?.clone();
-        let found = pnode.find(&mut self.cache, d)?;
-        if found {
+        if pnode.find(&mut self.cache, d)? {
             return Ok(false);
         }
 
@@ -107,14 +105,79 @@ impl Trie {
             }
         }
     }
+
+    /// Removes the given hash from the trie, if it does exist.
+    /// Returns false if the item did not exist.
+    pub fn delete(&mut self, d: &[u8]) -> Result<bool, TrieError> {
+        if self.root.is_none() {
+            return Ok(false);
+        } else if d.len() != self.element_length as usize {
+            return Err(TrieError::ElementLengthMismatch);
+        }
+        let pnode = self.cache.get_node(self.root.unwrap())?;
+        if !pnode.find(&mut self.cache, d)? {
+            return Ok(false);
+        }
+        //mt.cache.beginTransaction()
+        if pnode.is_leaf() {
+            // remove the root.
+            self.cache.delete_node(self.root.unwrap());
+            self.root = None;
+            //self.cache.commitTransaction()
+            self.element_length = 0;
+            return Ok(true);
+        }
+        match pnode.remove(&mut self.cache, d, &[]) {
+            Err(e) => {
+                //self.cache.rollbackTransaction()
+                Err(TrieError::CacheAccessError(e))
+            }
+            Ok(updated_root) => {
+                self.cache.delete_node(self.root.unwrap());
+                //self.cache.commitTransaction()
+                self.root = Some(updated_root);
+                Ok(true)
+            }
+        }
+    }
+
+    fn print(&mut self) {
+        //print!("Root: {:?}", self.root);
+        print!("Root: {:?}", self.root.is_some());
+        if let Some(root_id) = self.root {
+            self.print_node(0, root_id, 0);
+        }
+    }
+
+    fn print_node(&mut self, index: u8, id: NodeID, depth: u32) {
+        let node = self.cache.get_node(id).unwrap();
+        for _ in 0..depth {
+            print!("    ");
+        }
+        //print!("[{}] -> {}, ", index, id);
+        print!("[{}] -> ", index);
+        if node.is_leaf() {
+            println!("hash {:?}", node.hash);
+            return;
+        }
+        println!("{} children", node.get_child_count());
+        for (i, child) in node.children.unwrap().iter().enumerate() {
+            if child.is_none() {
+                continue;
+            }
+            self.print_node(i as u8, child.unwrap(), depth + 1);
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use rand::{seq::SliceRandom, thread_rng};
+
     #[test]
-    fn basic() {
+    fn go_compatibility() {
         let storage = InMemoryStorage::default();
         let mut trie = Trie::new(storage);
 
@@ -153,5 +216,93 @@ mod tests {
             &trie.root_hash().unwrap().to_string(),
             "UOT7QFKDJKXHMKESLG2L2YRHVTBIOP7NMCZUKAYBDRAWPMEPERHQ"
         );
+    }
+
+    #[test]
+    fn add_remove() {
+        let storage = InMemoryStorage::default();
+        let mut trie = Trie::new(storage);
+
+        // create 10,000 hashes.
+        let leaves = 10_000;
+        let mut hashes = Vec::with_capacity(10_000);
+        for i in 0..leaves {
+            hashes.push(hash(&[(i % 256) as u8, (i / 256) as u8]));
+        }
+
+        let mut roots_while_adding = Vec::with_capacity(leaves);
+        for hash in &hashes {
+            let res = trie.add(&hash.0);
+            assert_eq!(res.unwrap(), true);
+            roots_while_adding.push(trie.root_hash().unwrap());
+            //stats, _ := mt.GetStats()
+            //require.Equal(t, i+1, int(stats.LeafCount))
+        }
+
+        //stats, _ := mt.GetStats()
+        //require.Equal(t, len(hashes), int(stats.LeafCount))
+        //require.Equal(t, 4, int(stats.Depth))
+        //require.Equal(t, 10915, int(stats.NodesCount))
+        //require.Equal(t, 1135745, int(stats.Size))
+        //require.True(t, int(stats.NodesCount) > len(hashes))
+        //require.True(t, int(stats.NodesCount) < 2*len(hashes))
+
+        let final_root_hash = trie.root_hash().unwrap();
+
+        for i in (0..leaves).rev() {
+            let root_hash = trie.root_hash().unwrap();
+            assert_eq!(root_hash, roots_while_adding[i], "i={}", i);
+            let res = trie.delete(&hashes[i].0);
+            assert_eq!(res.unwrap(), true, "i={}", i);
+        }
+
+        let root_hash = trie.root_hash().unwrap();
+        assert_eq!(root_hash, CryptoHash::default());
+        //stats, _ = mt.GetStats()
+        //require.Equal(t, 0, int(stats.LeafCount))
+        //require.Equal(t, 0, int(stats.Depth))
+
+        // add the items in a different order.
+        let mut rng = thread_rng();
+        hashes.shuffle(&mut rng);
+        for hash in &hashes {
+            let res = trie.add(&hash.0);
+            assert_eq!(res.unwrap(), true);
+        }
+
+        let rand_order_root_hash = trie.root_hash().unwrap();
+        assert_eq!(rand_order_root_hash, final_root_hash);
+    }
+
+    #[test]
+    fn free_unused_nodes() {
+        let storage = InMemoryStorage::default();
+        let mut trie = Trie::new(storage);
+
+        // create 50,000 hashes.
+        let leaves = 50_000;
+        let mut hashes = Vec::with_capacity(leaves);
+        for i in 0..leaves {
+            hashes.push(hash(&[
+                (i % 256) as u8,
+                ((i / 256) % 256) as u8,
+                (i / 65536) as u8,
+            ]));
+        }
+
+        // add all nodes once
+        for i in 0..leaves {
+            trie.add(&hashes[i].0).unwrap();
+        }
+        let storage_size_before = trie.cache.storage.current_storage_size();
+        assert_ne!(storage_size_before, 0);
+
+        // remove all nodes, add them again, and compare storage sizes
+        for i in 0..leaves {
+            trie.delete(&hashes[i].0).unwrap();
+        }
+        let storage_size_empty = trie.cache.storage.current_storage_size();
+        assert_eq!(trie.root.is_none(), true);
+        assert_eq!(storage_size_empty, 0);
     }
 }
