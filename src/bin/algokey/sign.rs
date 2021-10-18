@@ -5,14 +5,13 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::Path;
 
-use clap::{AppSettings, Clap};
+use clap::{AppSettings, Parser};
 use ed25519_dalek::{Keypair, SECRET_KEY_LENGTH};
 
 use algorsand::crypto::mnemonic;
 use algorsand::data::{basics, transactions::*};
 
-#[derive(Clap)]
-#[clap(setting = AppSettings::ColoredHelp)]
+#[derive(Parser)]
 #[clap(setting = AppSettings::ArgRequiredElseHelp)]
 pub struct SignCmd {
     /// Private key filename

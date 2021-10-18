@@ -304,6 +304,7 @@ impl MultisigSignature {
     // MultisigMerge merges two Multisigs msig1 and msig2 into msigt
     fn merge(&self, other: &MultisigSignature) -> Result<Self, MultisigError> {
         // TODO write function for this match check!
+        //      like this: self.matches(other)?;
         // check if all parameters match
         if self.threshold != other.threshold
             || self.version != other.version

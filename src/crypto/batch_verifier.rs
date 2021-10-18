@@ -5,11 +5,10 @@ use std::cmp::max;
 
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 
-// TODO add benchmark
-
 const MIN_CAPACITY: usize = 16;
 
 pub struct BatchVerifier {
+    // TODO parametrize as BatchVerifier<H: Hashable> (less flexible) or use Vec<Box<impl Hashable>> here
     //messages   Vec<Hashable>          // contains a slice of messages to be hashed. Each message is varible length
     messages: Vec<Vec<u8>>, // contains a slice of messages to be hashed. Each message is varible length
     public_keys: Vec<PublicKey>, // contains a slice of public keys. Each individual public key is 32 bytes.

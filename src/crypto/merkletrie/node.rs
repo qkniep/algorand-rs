@@ -12,7 +12,7 @@ use crate::crypto::hashable::{hash, HASH_LEN};
 #[derive(Clone, Debug, Default)]
 pub struct Node {
     /// Makes root calculation more efficient by not recalculating hashes of unchanged subtrees.
-    // TODO check hash.len() < 32 instead???
+    // TODO check hash.len() < 32 and !is_leaf() instead???
     pub dirty: bool,
     pub hash: Vec<u8>,
     pub children: Option<[Option<NodeID>; 256]>,

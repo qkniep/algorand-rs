@@ -5,12 +5,14 @@
 //! For specification see: https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03
 
 use std::convert::TryInto;
+use std::fmt;
 
 use curve25519_dalek::{
     constants,
     edwards::{CompressedEdwardsY, EdwardsPoint},
     scalar::Scalar,
 };
+use data_encoding::BASE64;
 use ed25519_dalek::{ExpandedSecretKey, PublicKey, SecretKey};
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
@@ -208,6 +210,12 @@ impl Digest for TruncHasher {
     }
     fn digest(_: &[u8]) -> GenericArray<u8, Self::OutputSize> {
         unimplemented!()
+    }
+}
+
+impl fmt::Display for VrfPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", BASE64.encode(&self.0))
     }
 }
 

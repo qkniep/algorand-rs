@@ -6,15 +6,14 @@ use std::io::{self, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
-use clap::{AppSettings, Clap};
+use clap::Parser;
 use ed25519_dalek::{PublicKey, SecretKey};
 
 use algorsand::crypto::mnemonic;
 use algorsand::data::basics::address::Address;
 
 /// Import key files from mnemonic
-#[derive(Clap)]
-#[clap(setting = AppSettings::ColoredHelp)]
+#[derive(Parser)]
 pub struct ImportCmd {
     /// Private mnemonic phrase to import
     #[clap(short = 'm', long = "mnemonic", required = true)]

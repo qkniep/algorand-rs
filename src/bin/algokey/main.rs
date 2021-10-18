@@ -5,23 +5,22 @@ mod export;
 mod generate;
 mod import;
 //mod multisig;
-//mod part;
+mod part;
 mod sign;
 
-use clap::{AppSettings, Clap};
+use clap::{AppSettings, Parser};
 
 use export::ExportCmd;
 use generate::GenerateCmd;
 use import::ImportCmd;
 //use multisig::MultisigCmd;
-//use part::PartCmd;
+use part::PartCmd;
 use sign::SignCmd;
 
 /// CLI for managing Algorand keys
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(name = "algokey", version = "0.1")]
 #[clap(author = "Quentin M. Kniep <hello@quentinkniep.com>")]
-#[clap(setting = AppSettings::ColoredHelp)]
 #[clap(setting = AppSettings::ArgRequiredElseHelp)]
 struct RootCmd {
     // Sets a custom config file. Could have been an Option<T> with no default too
@@ -31,14 +30,14 @@ struct RootCmd {
     subcmd: SubCmd,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 enum SubCmd {
     Generate(GenerateCmd),
     Import(ImportCmd),
     Export(ExportCmd),
     Sign(SignCmd),
     //Multisig(MultisigCmd),
-    //Part(PartCmd),
+    Part(PartCmd),
 }
 
 fn main() {
@@ -69,6 +68,6 @@ fn main() {
         SubCmd::Export(e) => e.entrypoint(),
         SubCmd::Sign(s) => s.entrypoint(),
         //SubCmd::Multisig(m) => m.entrypoint(),
-        //SubCmd::Part(p) => p.entrypoint(),
+        SubCmd::Part(p) => p.entrypoint(),
     };
 }

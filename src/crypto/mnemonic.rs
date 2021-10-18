@@ -95,7 +95,6 @@ pub fn mnemonic_to_key(mnemonic: &[String]) -> Result<[u8; KEY_LEN_BYTES], Mnemo
     //   While converting back to byte array, our new 264 bits array is divisible by 8 but the last byte is just the padding.
 
     if bytes.len() != KEY_LEN_BYTES + 1 {
-        // TODO can this happen?
         unreachable!("{} instead of {} bytes", bytes.len(), KEY_LEN_BYTES + 1);
     }
 

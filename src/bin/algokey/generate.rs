@@ -6,15 +6,14 @@ use std::io::{self, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
-use clap::{AppSettings, Clap};
+use clap::{AppSettings, Parser};
 use ed25519_dalek::{PublicKey, SecretKey, SECRET_KEY_LENGTH};
 use rand::{thread_rng, RngCore};
 
 use algorsand::crypto::mnemonic;
 use algorsand::data::basics::address::Address;
 
-#[derive(Clap)]
-#[clap(setting = AppSettings::ColoredHelp)]
+#[derive(Parser)]
 #[clap(setting = AppSettings::ArgRequiredElseHelp)]
 pub struct GenerateCmd {
     /// Private key filename
@@ -33,7 +32,6 @@ impl GenerateCmd {
 
         let words = mnemonic::key_to_mnemonic(seed);
 
-        // TODO wrap this in some function in algorsand::crypto
         let key = SecretKey::from_bytes(&seed).unwrap();
         let pk: PublicKey = (&key).into();
         let pk_chk = Address(*pk.as_bytes()).to_string();

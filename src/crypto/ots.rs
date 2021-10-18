@@ -89,12 +89,12 @@ pub struct OTSSecrets {
     pub verifier: OTSVerifier,
 
     /// First batch whose subkey appears in Batches.
-    first_batch: u64,
+    pub first_batch: u64,
     batches: VecDeque<EphemeralSubkey>,
 
     /// First offset whose subkey appears in offsets.
     /// These subkeys correspond to batch first_batch-1.
-    first_offset: u64,
+    pub first_offset: u64,
     offsets: VecDeque<EphemeralSubkey>,
 
     /// When offsets is non-empty, `offsets_pk2` is the intermediate-level public
