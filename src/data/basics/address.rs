@@ -7,6 +7,7 @@ use std::str::FromStr;
 use data_encoding::BASE32_NOPAD;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512Trunc256};
+use thiserror::Error;
 
 use crate::crypto;
 
@@ -14,10 +15,13 @@ use crate::crypto;
 
 const CHECKSUM_LEN: usize = 4;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
 pub enum AddressError {
+    #[error("invalid base32 encoding")]
     InvalidBase32,
+    #[error("wrong length for address")]
     WrongLength,
+    #[error("invalid checksum")]
     InvalidChecksum,
 }
 

@@ -1,6 +1,8 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
+use std::convert::TryInto;
+
 use lazy_static::lazy_static;
 use rand::{rngs::OsRng, RngCore};
 use sled::Db;
@@ -173,22 +175,30 @@ impl Participation {
         )
     }
 
-    pub fn restore() -> Result<Participation, Error> {
-        /*
-        err = Migrate(store)
-        if err != nil {
-            return
-        }
-        row = tx.QueryRow("select parent, vrf, voting, firstValid, lastValid, keyDilution from ParticipationAccount")
-        err = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution)
-        if err != nil {
-            return fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err)
-        }
+    pub fn restore() -> Result<Self, Error> {
+        let raw_parent = KEY_STORE.get("part-parent")?;
+        let raw_vrf = KEY_STORE.get("part-vrf")?;
+        let raw_voting = KEY_STORE.get("part-voting")?;
+        let raw_first_valid = KEY_STORE.get("part-first_valid")?;
+        let raw_last_valid = KEY_STORE.get("part-last_valid")?;
+        let raw_key_dilution = KEY_STORE.get("part-key_dilution")?;
 
-        copy(acc.Parent[:32], rawParent)
-        return acc, nil
-        */
-        Err(Error::NotFound)
+        let parent = raw_parent.unwrap().as_ref().try_into().unwrap();
+        let vrf = protocol::decode(&raw_vrf.unwrap())?;
+        let voting = protocol::decode(&raw_voting.unwrap())?;
+        let first_valid = u64::from_be_bytes(raw_first_valid.unwrap().as_ref().try_into().unwrap());
+        let last_valid = u64::from_be_bytes(raw_last_valid.unwrap().as_ref().try_into().unwrap());
+        let key_dilution =
+            u64::from_be_bytes(raw_key_dilution.unwrap().as_ref().try_into().unwrap());
+
+        Ok(Self {
+            parent: basics::Address(parent),
+            vrf,
+            voting,
+            first_valid: basics::Round(first_valid),
+            last_valid: basics::Round(last_valid),
+            key_dilution,
+        })
     }
 
     /// Securely deletes ephemeral keys for rounds strictly older than the given round.
@@ -207,12 +217,14 @@ impl Participation {
         let voting = self.voting.snapshot();
         let voting_enc = protocol::encode(&voting);
         KEY_STORE.insert("part-voting", voting_enc)?;
+        KEY_STORE.flush()?;
         Ok(())
     }
 
     /// Writes a new parent address to the partkey database.
     pub fn persist_new_parent(&self) -> Result<(), Error> {
         KEY_STORE.insert("part-parent", &self.parent.0[..])?;
+        KEY_STORE.flush()?;
         Ok(())
     }
 
@@ -268,6 +280,7 @@ impl Participation {
         KEY_STORE.insert("part-first_valid", &self.first_valid.0.to_be_bytes()[..])?;
         KEY_STORE.insert("part-last_valid", &self.last_valid.0.to_be_bytes()[..])?;
         KEY_STORE.insert("part-key_dilution", &self.key_dilution.to_be_bytes()[..])?;
+        KEY_STORE.flush()?;
 
         Ok(())
     }

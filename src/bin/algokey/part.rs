@@ -77,27 +77,64 @@ impl PartCmd {
 
 impl PartGenerateCmd {
     pub fn entrypoint(&self) {
-        let part_key = account::Participation::fill_db_with_participation_keys(
+        let key_dilution = match self.dilution {
+            0 => 1 + ((self.last - self.first) as f64).sqrt() as u64,
+            _ => self.dilution,
+        };
+
+        let res = account::Participation::fill_db_with_participation_keys(
             Address::from_str(&self.parent).unwrap(),
             Round(self.first),
             Round(self.last),
-            self.dilution,
-        )
-        .unwrap();
+            key_dilution,
+        );
 
-        print_participation_key(part_key);
+        match res {
+            Ok(part_key) => print_participation_key(part_key),
+            Err(e) => {
+                eprintln!("Failed to create participation key: {}", e);
+                std::process::exit(1);
+            }
+        }
     }
 }
 
 impl PartInfoCmd {
     pub fn entrypoint(&self) {
-        let part_key = account::Participation::restore().unwrap();
-        print_participation_key(part_key);
+        let res = account::Participation::restore();
+
+        match res {
+            Ok(part_key) => print_participation_key(part_key),
+            Err(e) => {
+                eprintln!("Failed to load participation key: {}", e);
+                std::process::exit(1);
+            }
+        }
     }
 }
 
 impl PartReparentCmd {
-    pub fn entrypoint(&self) {}
+    pub fn entrypoint(&self) {
+        let parent = Address::from_str(&self.parent).unwrap_or_else(|e| {
+            eprintln!("Failed to parse parent address: {}", e);
+            std::process::exit(1);
+        });
+
+        let mut part_key = account::Participation::restore().unwrap_or_else(|e| {
+            eprintln!("Failed to load participiation key: {}", e);
+            std::process::exit(1);
+        });
+
+        part_key.parent = parent;
+
+        match part_key.persist_new_parent() {
+            Ok(_) => print_participation_key(part_key),
+            Err(e) => {
+                eprintln!("Failed to store participation key: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
 }
 
 fn print_participation_key(part_key: account::Participation) {
