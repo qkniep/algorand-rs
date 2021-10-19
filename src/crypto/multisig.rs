@@ -16,7 +16,7 @@ const MAX_MULTISIG: u8 = 255;
 // TODO implement and use Hashable trait
 
 #[derive(Debug, PartialEq, Eq)]
-struct MultisigAddr([u8; 32]);
+pub struct MultisigAddr([u8; 32]);
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MultisigSubsig {
@@ -187,7 +187,8 @@ impl MultisigSignature {
         Ok(msig)
     }
 
-    fn verify(&self, msg: &[u8], addr: &MultisigAddr) -> Result<bool, MultisigError> {
+    /// Verifies an assembled `MultisigSig`.
+    pub fn verify(&self, msg: &[u8], addr: &MultisigAddr) -> Result<bool, MultisigError> {
         let mut batch_verifier = BatchVerifier::default();
 
         if !self.batch_verify(msg, addr, &mut batch_verifier)? {
@@ -199,8 +200,8 @@ impl MultisigSignature {
         }
     }
 
-    // MultisigBatchVerify verifies an assembled MultisigSig.
-    // it is the caller responsibility to call batchVerifier.verify()
+    /// Verifies an assembled `MultisigSig`.
+    /// It is the caller's responsibility to call `batch_verifier.verify()`.
     fn batch_verify(
         &self,
         msg: &[u8],
@@ -259,31 +260,12 @@ impl MultisigSignature {
             return Err(MultisigError::InvalidNumberOfSignatures);
         }
 
-        // check if all unisig match
-        // TODO write function for this match check!
+        // check if all unisigs match
         for unisig in &unisigs {
-            if self.threshold != unisig.threshold {
-                return Err(MultisigError::ThresholdsDontMatch(
-                    self.threshold,
-                    unisig.threshold,
-                ));
-            } else if self.version != unisig.version {
-                return Err(MultisigError::VersionsDontMatch(
-                    self.version,
-                    unisig.version,
-                ));
-            } else if self.subsigs.len() != unisig.subsigs.len() {
-                return Err(MultisigError::KeysDontMatch);
-            }
-
-            for i in 0..unisigs[0].subsigs.len() {
-                if self.subsigs[i].key != unisig.subsigs[i].key {
-                    return Err(MultisigError::KeysDontMatch);
-                }
-            }
+            self.matches(unisig, unisigs[0].subsigs.len())?;
         }
 
-        // update the msig
+        // update this msig
         for usig in unisigs {
             for (i, mut subsig) in self.subsigs.iter_mut().enumerate() {
                 if usig.subsigs[i].sig.is_some() {
@@ -301,24 +283,10 @@ impl MultisigSignature {
         Ok(())
     }
 
-    // MultisigMerge merges two Multisigs msig1 and msig2 into msigt
+    /// Merges two multisigs into one.
     fn merge(&self, other: &MultisigSignature) -> Result<Self, MultisigError> {
-        // TODO write function for this match check!
-        //      like this: self.matches(other)?;
-        // check if all parameters match
-        if self.threshold != other.threshold
-            || self.version != other.version
-            || self.subsigs.len() != other.subsigs.len()
-        {
-            return Err(MultisigError::InvalidThreshold);
-        }
+        self.matches(other, self.subsigs.len())?;
 
-        for i in 0..self.subsigs.len() {
-            if self.subsigs[i].key != other.subsigs[i].key {
-                return Err(MultisigError::KeysDontMatch);
-            }
-        }
-        // update msigt
         let mut msig = MultisigSignature {
             version: self.version,
             threshold: self.threshold,
@@ -333,10 +301,10 @@ impl MultisigSignature {
 
             if self.subsigs[i].sig.is_none() {
                 if other.subsigs[i].sig.is_some() {
-                    // update signature with msig2's signature
+                    // update signature with other's signature
                     msig.subsigs[i].sig = other.subsigs[i].sig;
                 }
-            } else if other.subsigs[i].sig.is_none() || // msig2's sig is empty
+            } else if other.subsigs[i].sig.is_none() || // other's sig is empty
                 other.subsigs[i].sig == self.subsigs[i].sig
             {
                 // valid duplicates
@@ -349,6 +317,31 @@ impl MultisigSignature {
         }
 
         Ok(msig)
+    }
+
+    /// Checks whether the two `MultisigSignature`s are compatible.
+    fn matches(&self, other: &MultisigSignature, num_subsigs: usize) -> Result<(), MultisigError> {
+        if self.threshold != other.threshold {
+            return Err(MultisigError::ThresholdsDontMatch(
+                self.threshold,
+                other.threshold,
+            ));
+        } else if self.version != other.version {
+            return Err(MultisigError::VersionsDontMatch(
+                self.version,
+                other.version,
+            ));
+        } else if self.subsigs.len() != other.subsigs.len() {
+            return Err(MultisigError::KeysDontMatch);
+        }
+
+        for i in 0..num_subsigs {
+            if self.subsigs[i].key != other.subsigs[i].key {
+                return Err(MultisigError::KeysDontMatch);
+            }
+        }
+
+        Ok(())
     }
 }
 
