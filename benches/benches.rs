@@ -13,6 +13,7 @@ criterion_group!(batch, batch_verifier);
 criterion_group!(merkle, merkle_root, merkle_prove, merkle_verify);
 criterion_group!(vrf, vrf_verify);
 
-criterion_group!(data, old_keys_deletion);
+criterion_group!(account, old_keys_deletion);
+criterion_group!(basics, address_from_str, address_to_string);
 
-criterion_main!(batch, merkle, vrf, data);
+criterion_main!(batch, merkle, vrf, account, basics);
