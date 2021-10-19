@@ -110,7 +110,6 @@ mod tests {
 
     #[test]
     fn invalid_sig() {
-        // TODO flaky test?
         let n = 64;
         let mut bv = BatchVerifier::with_capacity(1);
 
@@ -127,7 +126,7 @@ mod tests {
 
         // break signature by modifying one byte
         let mut sig_bytes = sig.to_bytes();
-        sig_bytes[0] = sig_bytes[0] + 1;
+        sig_bytes[0] = sig_bytes[0].wrapping_add(1);
         sig = Signature::new(sig_bytes);
 
         bv.enque_sig(kp.public, &msg, sig);
