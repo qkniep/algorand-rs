@@ -275,6 +275,50 @@ mod tests {
     }
 
     #[test]
+    fn random_add_remove() {
+        let storage = InMemoryStorage::default();
+        let mut trie = Trie::new(storage);
+
+        // create 10,000 hashes.
+        let mut hashes_to_add = Vec::new();
+        for i in 0..10_000 {
+            hashes_to_add.push(hash(&[(i % 256) as u8, (i / 256) as u8]));
+        }
+        let mut hashes_to_remove = Vec::new();
+
+        let mut add_next = true; // true: add, false: remove
+        for i in 0..100_000 {
+            let curr_hash: CryptoHash;
+            if add_next && !hashes_to_add.is_empty() || hashes_to_remove.is_empty() {
+                // pick an item to add:
+                let mut semi_random_idx = hashes_to_add[0].0[0] as usize
+                    + hashes_to_add[0].0[1] as usize * 256
+                    + hashes_to_add[0].0[3] as usize * 65536
+                    + i;
+                semi_random_idx %= hashes_to_add.len();
+                curr_hash = hashes_to_add.remove(semi_random_idx);
+                assert_eq!(trie.add(&curr_hash.0).unwrap(), true);
+                hashes_to_remove.push(curr_hash.clone());
+            } else {
+                // pick an item to remove:
+                let mut semi_random_idx = hashes_to_remove[0].0[0] as usize
+                    + hashes_to_remove[0].0[1] as usize * 256
+                    + hashes_to_remove[0].0[3] as usize * 65536
+                    + i;
+                semi_random_idx %= hashes_to_remove.len();
+                curr_hash = hashes_to_remove.remove(semi_random_idx);
+                assert_eq!(trie.delete(&curr_hash.0).unwrap(), true);
+                hashes_to_add.push(curr_hash.clone());
+            }
+            add_next = curr_hash.0[0] > 128;
+            if i % (1 + curr_hash.0[0] as usize) == 42 {
+                //trie.commit().unwrap();
+                //verifyCacheNodeCount(t, mt)
+            }
+        }
+    }
+
+    #[test]
     fn free_unused_nodes() {
         let storage = InMemoryStorage::default();
         let mut trie = Trie::new(storage);
@@ -297,7 +341,7 @@ mod tests {
         let storage_size_before = trie.cache.storage.current_storage_size();
         assert_ne!(storage_size_before, 0);
 
-        // remove all nodes, add them again, and compare storage sizes
+        // remove all nodes, and see if all nodes were actually deleted
         for i in 0..leaves {
             trie.delete(&hashes[i].0).unwrap();
         }

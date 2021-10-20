@@ -669,8 +669,7 @@ mod tests {
         assert_eq!(prefix, protocol::APP_INDEX);
         assert_eq!(buf, vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00]);
 
-        // test value created with:
-        // python -c "import algosdk.encoding as e; print(e.encode_address(e.checksum(b'appID'+($APPID).to_bytes(8, 'big'))))"
+        // test value from go-algorand
         let i = AppIndex(77);
         assert_eq!(
             i.address().to_string(),

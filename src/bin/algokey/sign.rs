@@ -45,7 +45,7 @@ impl SignCmd {
 
         // write signed tx back to file
         let mut out_f = fs::File::open(&self.out_file).unwrap();
-        rmp_serde::encode::write(&mut out_f, &sig_tx);
+        rmp_serde::encode::write(&mut out_f, &sig_tx).unwrap();
     }
 }
 

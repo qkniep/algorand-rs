@@ -11,8 +11,6 @@ use thiserror::Error;
 
 use crate::crypto;
 
-// TODO implement benchmarks
-
 const CHECKSUM_LEN: usize = 4;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
