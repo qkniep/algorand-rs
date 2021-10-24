@@ -1,5 +1,5 @@
 # Algorsand
-[![Build Status](https://img.shields.io/travis/com/qkniep/algorand-rs?label=build&logo=travis&style=for-the-badge)](https://travis-ci.org/qkniep/algorand-rs)
+[![Build Status](https://img.shields.io/travis/com/qkniep/algorand-rs?label=build&logo=travis&style=for-the-badge)](https://travis-ci.com/qkniep/algorand-rs)
 [![Test Coverage](https://img.shields.io/codecov/c/github/qkniep/algorand-rs?label=test%20coverage&logo=codecov&style=for-the-badge)](https://codecov.io/gh/qkniep/algorand-rs)
 [![crates.io](https://img.shields.io/crates/v/algorsand?logo=rust&style=for-the-badge)](https://crates.io/crates/algorsand)
 
