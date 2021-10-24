@@ -3,6 +3,8 @@
 
 mod account;
 mod basics;
+mod committee;
 
 pub use account::*;
 pub use basics::*;
+pub use committee::*;

@@ -6,4 +6,5 @@ pub mod account;
 pub mod basics;
 //pub mod bookkeeping;
 pub mod committee;
+pub mod signed_tx_group;
 pub mod transactions;

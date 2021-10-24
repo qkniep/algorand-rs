@@ -14,7 +14,7 @@ use crate::data::basics;
 use crate::protocol;
 
 /// A hash uniquely identifying individual transactions.
-pub struct TxID(CryptoHash);
+pub struct TxID(pub CryptoHash);
 
 /// Prints TxID as a pretty-printable string.
 impl fmt::Display for TxID {

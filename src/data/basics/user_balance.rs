@@ -453,7 +453,7 @@ impl AccountData {
     /// Returns the amount of MicroAlgos associated with the user's account
     /// for the purpose of participating in the Algorand protocol.
     /// It assumes the caller has already updated rewards appropriately using `with_updated_rewards()`.
-    fn voting_stake(&self) -> MicroAlgos {
+    pub fn voting_stake(&self) -> MicroAlgos {
         match self.status {
             Status::Online => self.micro_algos,
             _ => MicroAlgos(0),

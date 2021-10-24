@@ -1,6 +1,11 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
+pub mod credential;
+pub mod sortition;
+#[cfg(test)]
+mod tests;
+
 use serde::{Deserialize, Serialize};
 
 use crate::config;
@@ -10,9 +15,9 @@ use crate::protocol;
 
 /// A Selector deterministically defines a cryptographic sortition committee.
 /// It contains both the input to the sortition VRF and the size of the sortition committee.
-trait Selector: Hashable {
+pub trait Selector: Hashable {
     /// Returns the size of the committee determined by this `Selector`.
-    fn committee_size(params: config::ConsensusParams) -> u64;
+    fn committee_size(&self, params: &config::ConsensusParams) -> u64;
 }
 
 /// Pairs an account's address with its associated data.

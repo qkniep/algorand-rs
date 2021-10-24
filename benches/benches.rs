@@ -15,5 +15,6 @@ criterion_group!(vrf, vrf_verify);
 
 criterion_group!(account, old_keys_deletion);
 criterion_group!(basics, address_from_str, address_to_string);
+criterion_group!(committee, sortition_select);
 
-criterion_main!(batch, merkle, vrf, account, basics);
+criterion_main!(batch, merkle, vrf, account, basics, committee);

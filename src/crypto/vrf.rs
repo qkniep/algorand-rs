@@ -19,6 +19,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512};
 use thiserror::Error;
 
+use crate::crypto;
+
 /// A single byte string identifying ECVRF-ED25519-SHA512-Elligator2.
 const SUITE_STRING: [u8; 1] = [0x04];
 
@@ -38,7 +40,7 @@ pub struct VrfPublicKey([u8; 32]);
 pub struct VrfProof([u8; 80]);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VrfOutput([u8; 64]);
+pub struct VrfOutput(pub [u8; 64]);
 
 /// Different errors that can be raised when proving/verifying VRFs.
 #[derive(Debug, Error)]
@@ -69,6 +71,12 @@ impl VrfKeypair {
             private: seed,
             public: VrfPublicKey(pk.to_bytes()),
         }
+    }
+
+    /// Constructs a VRF Proof for a given Hashable.
+    /// Returns Err if the private key is malformed.
+    pub fn prove(&self, msg: &impl crypto::Hashable) -> Result<VrfProof, ()> {
+        self.prove_bytes(&crypto::hash_obj(msg).0)
     }
 
     /// Generates a proof for a given message using this secret key, as specified in:
@@ -112,9 +120,22 @@ impl VrfKeypair {
 }
 
 impl VrfPublicKey {
+    /// Checks a VRF proof of a given Hashable.
+    /// If the proof is valid the pseudorandom VrfOutput will be returned.
+    /// For a given public key and message, there are potentially multiple valid proofs.
+    /// However, given a public key and message, all valid proofs will yield the same output.
+    /// Moreover, the output is indistinguishable from random to anyone without the proof or the secret key.
+    pub fn verify(
+        &self,
+        proof: &VrfProof,
+        msg: &impl crypto::Hashable,
+    ) -> Result<VrfOutput, VrfError> {
+        self.verify_bytes(proof, &crypto::hash_obj(msg).0)
+    }
+
     /// Validates a proof for a given message against this public key, as specified in:
     /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03 (section 5.3).
-    pub fn verify_bytes(&self, proof: VrfProof, bytes: &[u8]) -> Result<VrfOutput, VrfError> {
+    pub fn verify_bytes(&self, proof: &VrfProof, bytes: &[u8]) -> Result<VrfOutput, VrfError> {
         let decoded = proof.decode();
         if decoded.is_none() {
             return Err(VrfError::InvalidProof);
@@ -172,6 +193,12 @@ impl VrfProof {
 impl AsRef<[u8]> for VrfProof {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
+    }
+}
+
+impl Default for VrfOutput {
+    fn default() -> Self {
+        VrfOutput([0; 64])
     }
 }
 
@@ -320,7 +347,7 @@ mod tests {
         let pi_calculated = kp.prove_bytes(alpha).unwrap();
         assert_eq!(pi_calculated, pi);
 
-        let beta_calculated = pk.verify_bytes(pi, alpha).unwrap();
+        let beta_calculated = pk.verify_bytes(&pi, alpha).unwrap();
         assert_eq!(beta_calculated, beta);
     }
 

@@ -20,7 +20,7 @@ pub fn vrf_verify(c: &mut Criterion) {
                 let proof = kp.prove_bytes(r_str.as_bytes()).unwrap();
                 (kp.public(), r_str, proof)
             },
-            |(pk, msg, proof)| pk.verify_bytes(proof, msg.as_bytes()).unwrap(),
+            |(pk, msg, proof)| pk.verify_bytes(&proof, msg.as_bytes()).unwrap(),
             BatchSize::SmallInput,
         );
     });
