@@ -38,7 +38,7 @@ struct Membership<S: Selector> {
 
 /// Contains cryptographic entropy which can be used to determine a committee.
 #[derive(Clone, Default, Serialize, Deserialize)]
-pub struct Seed([u8; 32]);
+pub struct Seed(pub [u8; 32]);
 
 impl Hashable for Seed {
     fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>) {

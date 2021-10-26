@@ -15,7 +15,7 @@ pub use hash::*;
 pub use tags::*;
 pub use txtype::*;
 
-pub type NetworkID = &'static str;
+pub type NetworkID = String;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CompactCertType {

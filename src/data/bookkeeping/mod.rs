@@ -2,5 +2,7 @@
 // Distributed under terms of the MIT license.
 
 pub mod block;
+pub mod genesis;
 
 pub use block::*;
+pub use genesis::*;

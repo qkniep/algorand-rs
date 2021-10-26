@@ -20,6 +20,10 @@ impl Payset {
         self.commit(false)
     }
 
+    pub fn commit_genesis(&self) -> CryptoHash {
+        self.commit(true)
+    }
+
     /// Handles the logic for both Commit and CommitGenesis.
     fn commit(&self, genesis: bool) -> CryptoHash {
         hash_obj(self)

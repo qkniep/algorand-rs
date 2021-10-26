@@ -25,19 +25,19 @@ use crate::protocol;
 pub use consensus::*;
 
 /// Identifies the 'development network' for development and not generally accessible publicly.
-pub const DEVNET: protocol::NetworkID = "devnet";
+pub const DEVNET: &str = "devnet";
 
 /// Identifies the 'beta network' for early releases of feature to the public prior to releasing these to mainnet/testnet.
-pub const BETANET: protocol::NetworkID = "betanet";
+pub const BETANET: &str = "betanet";
 
 /// Identifies the 'development network for tests' for running tests against development and not generally accessible publicly.
-pub const DEVTESTNET: protocol::NetworkID = "devtestnet";
+pub const DEVTESTNET: &str = "devtestnet";
 
 /// Identifies the publicly-available test network.
-pub const TESTNET: protocol::NetworkID = "testnet";
+pub const TESTNET: &str = "testnet";
 
 /// Identifies the publicly-available real-money network.
-pub const MAINNET: protocol::NetworkID = "mainnet";
+pub const MAINNET: &str = "mainnet";
 
 /// The name of the file containing the genesis block.
 pub const GENESIS_JSON_FILE: &str = "genesis.json";
@@ -544,13 +544,13 @@ impl Local {
         // file and we're targeting a devnet (via genesis file),
         // we the explicitly set devnet network bootstrap.
         if self.dns_bootstrap_id == Local::default().dns_bootstrap_id {
-            match network {
+            match network.as_ref() {
                 DEVNET => return "devnet.algodev.network".to_owned(),
                 BETANET => return "betanet.algodev.network".to_owned(),
                 _ => {}
             }
         }
-        self.dns_bootstrap_id.replace("<network>", network)
+        self.dns_bootstrap_id.replace("<network>", &network)
     }
 
     /// Writes the Local settings into a root/ConfigFilename file.
