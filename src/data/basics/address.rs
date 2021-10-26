@@ -23,7 +23,7 @@ pub enum AddressError {
     InvalidChecksum,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Address(pub [u8; 32]);
 
 impl Address {

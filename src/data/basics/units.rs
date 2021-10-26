@@ -18,7 +18,9 @@ pub type RoundInterval = u64;
 pub struct MicroAlgos(pub u64);
 
 /// A protocol round index.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub struct Round(pub u64);
 
 impl MicroAlgos {

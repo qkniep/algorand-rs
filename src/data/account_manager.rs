@@ -2,6 +2,7 @@
 // Distributed under terms of the MIT license.
 
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 
 use tracing::warn;
@@ -12,7 +13,7 @@ use crate::data::{account, basics, bookkeeping};
 use crate::protocol;
 
 /// A ParticipationKeyIdentity defines the parameters that makes a pariticpation key unique.
-#[derive(Hash, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 struct ParticipationKeyIdentity {
     pub address: basics::Address, // the address this participation key is used to vote for.
 
@@ -104,26 +105,26 @@ impl AccountManager {
         agreement_proto: config::ConsensusParams,
     ) {
         let _guard = self.mu.lock();
-        let latest_proto = config::CONSENSUS.0[&latest_header.current_protocol];
+        let latest_proto = &config::CONSENSUS.0[&latest_header.upgrade_state.current_protocol];
 
-        for part in self.part_keys.values() {
+        for part in self.part_keys.values_mut() {
             // We need a key for round r+1 for agreement.
-            let next_round = latest_header.round + 1;
+            let mut next_round = latest_header.round + basics::Round(1);
 
-            if latest_header.compact_cert[protocol::CompactCertType::Basic].compactcert_next_round
-                > 0
+            if latest_header.compact_certs[&protocol::CompactCertType::Basic].compactcert_next_round
+                > basics::Round(0)
             {
                 // We need a key for the next compact cert round.
                 // This would be CompactCertNextRound+1 (+1 because compact
                 // cert code uses the next round's ephemeral key), except
                 // if we already used that key to produce a signature (as
                 // reported in ccSigs).
-                let mut next_cc = latest_header.compact_cert[protocol::CompactCertType::Basic]
+                let mut next_cc = latest_header.compact_certs[&protocol::CompactCertType::Basic]
                     .compactcert_next_round
-                    + 1;
-                if cc_sig.get(part.parent).unwrap() >= next_cc {
-                    next_cc = cc_sigs.get(part.parent).unwrap()
-                        + basics::Round(latest_proto.compactcert_rounds + 1);
+                    + basics::Round(1);
+                if cc_sigs.get(&part.parent).unwrap() >= &next_cc {
+                    next_cc = *cc_sigs.get(&part.parent).unwrap()
+                        + basics::Round(latest_proto.compact_cert_rounds + 1);
                 }
 
                 if next_cc < next_round {
@@ -133,7 +134,7 @@ impl AccountManager {
 
             // we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
             let (first, last) = part.valid_interval();
-            if let Err(err) = part.delete_old_keys(next_round, agreement_proto) {
+            if let Err(err) = part.delete_old_keys(next_round, &agreement_proto) {
                 let err_str = format!(
                     "AccountManager.DeleteOldKeys(): key for {} ({}-{}), next_round {}",
                     part.address().to_string(),
@@ -145,6 +146,16 @@ impl AccountManager {
                 warn!("{}: {}", err_str, err);
             }
         }
+    }
+}
+
+impl Hash for ParticipationKeyIdentity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.address.hash(state);
+        self.first_valid.hash(state);
+        self.last_valid.hash(state);
+        self.vote_id.as_bytes().hash(state);
+        self.selection_id.hash(state);
     }
 }
 

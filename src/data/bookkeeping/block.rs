@@ -17,7 +17,7 @@ use crate::protocol;
 
 /// A Block contains the Payset and metadata corresponding to a given Round.
 #[derive(Clone)]
-struct Block {
+pub struct Block {
     pub header: BlockHeader,
     pub payset: transactions::Payset,
 }
@@ -25,7 +25,7 @@ struct Block {
 /// Represents the metadata and commitments to the state of a Block.
 /// The Algorand Ledger may be defined minimally as a cryptographically authenticated series of `BlockHeader` objects.
 #[derive(Clone, Default, Serialize, Deserialize)]
-struct BlockHeader {
+pub struct BlockHeader {
     pub round: basics::Round,
 
     /// The hash of the previous block
@@ -112,7 +112,7 @@ struct BlockHeader {
 
 /// RewardsState represents the global parameters controlling the rate at which accounts accrue rewards.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-struct RewardsState {
+pub struct RewardsState {
     /// The fee sink accepts transaction fees.
     /// It can only spend to the incentive pool.
     pub fee_sink: basics::Address,
@@ -138,7 +138,7 @@ struct RewardsState {
 
 /// Represents the vote of the block proposer with respect to protocol upgrades.
 #[derive(Clone, Default, Serialize, Deserialize)]
-struct UpgradeVote {
+pub struct UpgradeVote {
     /// UpgradePropose indicates a proposed upgrade
     pub upgrade_propose: protocol::ConsensusVersion,
 
@@ -155,9 +155,9 @@ struct UpgradeVote {
 /// (instead of materializing it separately, like balances).
 //msgp:ignore UpgradeState
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-struct UpgradeState {
-    pub current_protocol:       protocol::ConsensusVersion,
-    pub next_protocol:          protocol::ConsensusVersion,
+pub struct UpgradeState {
+    pub current_protocol: protocol::ConsensusVersion,
+    pub next_protocol: Option<protocol::ConsensusVersion>,
     pub next_protocol_approvals: u64,
     /// NextProtocolVoteBefore specify the last voting round for the next protocol proposal. If there is no voting for
     /// an upgrade taking place, this would be zero.
@@ -169,7 +169,7 @@ struct UpgradeState {
 
 /// CompactCertState tracks the state of compact certificates.
 #[derive(Clone, Serialize, Deserialize)]
-struct CompactCertState {
+pub struct CompactCertState {
     /// CompactCertVoters is the root of a Merkle tree containing
     /// the online accounts that will help sign a compact certificate.
     /// The Merkle root, and the compact certificate,
@@ -197,18 +197,18 @@ impl Block {
     }
 
     /// Returns the consensus protocol params for a block.
-    pub fn consensus_protocol(&self) -> config::ConsensusParams {
-        config::CONSENSUS.0[&self.header.upgrade_state.current_protocol]
+    pub fn consensus_protocol(&self) -> &config::ConsensusParams {
+        &config::CONSENSUS.0[&self.header.upgrade_state.current_protocol]
     }
 
     /// Returns the genesis ID from the block header.
     pub fn genesis_id(&self) -> String {
-        self.header.genesis_id
+        self.header.genesis_id.clone()
     }
 
     /// Returns the genesis hash from the block header.
     pub fn genesis_hash(&self) -> CryptoHash {
-        self.header.genesis_hash
+        self.header.genesis_hash.clone()
     }
 
     /// WithSeed returns a copy of the Block with the seed set to s.
@@ -220,34 +220,37 @@ impl Block {
 
     /// Seed returns the Block's random seed.
     pub fn seed(&self) -> committee::Seed {
-        self.header.seed
+        self.header.seed.clone()
     }
 
     /// Constructs a new valid block with an empty payset and an unset seed.
-    pub fn new(prev: &BlockHeader) -> Block {
+    pub fn new(prev: &mut BlockHeader) -> Block {
         let (upgrade_vote, upgrade_state) = process_upgrade_params(prev).unwrap();
 
-        let params = config::CONSENSUS.0[&upgrade_state.current_protocol];
+        let params = &config::CONSENSUS.0[&upgrade_state.current_protocol];
 
-        let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+        let mut timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         if prev.timestamp > 0 {
             if timestamp < prev.timestamp {
                 timestamp = prev.timestamp;
-            } else if timestamp > prev.timestamp+params.max_timestamp_increment {
+            } else if timestamp > prev.timestamp + params.max_timestamp_increment {
                 timestamp = prev.timestamp + params.max_timestamp_increment;
             }
         }
 
         // the merkle root of TXs will update when fillpayset is called
-        let blk = Block {
+        let mut blk = Block {
             header: BlockHeader {
-                round:        basics::Round(prev.round.0 + 1),
-                branch:       hash_obj(prev),
+                round: basics::Round(prev.round.0 + 1),
+                branch: hash_obj(prev),
                 upgrade_vote,
                 upgrade_state,
                 timestamp,
-                genesis_id:    prev.genesis_id,
-                genesis_hash:  prev.genesis_hash,
+                genesis_id: prev.genesis_id.clone(),
+                genesis_hash: prev.genesis_hash.clone(),
                 ..Default::default()
             },
             payset: Default::default(),
@@ -259,17 +262,20 @@ impl Block {
         // We can't know the entire RewardsState yet, but we can carry over the special addresses.
         blk.header.rewards_state.fee_sink = prev.rewards_state.fee_sink;
         blk.header.rewards_state.rewards_pool = prev.rewards_state.rewards_pool;
-        return blk
+        return blk;
     }
 
     /// Computes the commitment to the payset,
     /// using the appropriate commitment plan based on the block's protocol.
     pub fn payset_commit(&self) -> Result<CryptoHash, ()> {
-        let params = config::CONSENSUS.0[&self.header.upgrade_state.current_protocol];
+        let params = &config::CONSENSUS.0[&self.header.upgrade_state.current_protocol];
 
         match params.payset_commit {
             config::PaysetCommitType::Flat => Ok(self.payset.commit_flat()),
             config::PaysetCommitType::Merkle => Ok(self.tx_merkle_tree()?.root()),
+            config::PaysetCommitType::Unsupported => {
+                panic!("encountered unsuppported payset commit type")
+            }
         }
     }
 
@@ -280,22 +286,27 @@ impl Block {
         match self.payset_commit() {
             Ok(expected) => expected == self.header.tx_root,
             Err(err) => {
-                warn!("Block::contents_match_header(): cannot compute commitment: {:?}", err);
+                warn!(
+                    "Block::contents_match_header(): cannot compute commitment: {:?}",
+                    err
+                );
                 return false;
-            },
+            }
         }
-
     }
 
     /// Decodes `block.payset` using `decode_signed_tx`, and returns the transactions in groups.
     pub fn DecodePaysetGroups(&self) -> Result<Vec<Vec<transactions::SignedTxWithAD>>, ()> {
-        let res = Vec::new();
-        let last_group = Vec::<transactions::SignedTxWithAD>::new();
+        let mut res = Vec::new();
+        let mut last_group = Vec::<transactions::SignedTxWithAD>::new();
 
         for txib in &self.payset.0 {
             let stxad = self.header.decode_signed_tx(txib)?;
 
-            if !last_group.is_empty() && (last_group[0].tx.tx.header().group != stxad.tx.tx.header().group || last_group[0].tx.tx.header().group.is_zero()) {
+            if !last_group.is_empty()
+                && (last_group[0].tx.tx.header().group != stxad.tx.tx.header().group
+                    || last_group[0].tx.tx.header().group.is_zero())
+            {
                 res.push(last_group.drain(..).collect());
             }
 
@@ -310,7 +321,7 @@ impl Block {
 
     /// Decodes `block.payset` using `decode_signed_tx`, and flattens groups.
     pub fn DecodePaysetFlat(&self) -> Result<Vec<transactions::SignedTxWithAD>, ()> {
-        let res = Vec::new();
+        let mut res = Vec::new();
         for txib in &self.payset.0 {
             res.push(self.header.decode_signed_tx(txib)?);
         }
@@ -324,9 +335,9 @@ impl Block {
 
 impl BlockHeader {
     /// Checks if this block header is a valid successor to the previous block's header, prev.
-    pub fn pre_check(&self, prev: BlockHeader) -> Result<(), ()> {
+    pub fn pre_check(&self, prev: &mut BlockHeader) -> Result<(), ()> {
         // check protocol
-        let params = config::CONSENSUS.0[&self.upgrade_state.current_protocol];
+        let params = &config::CONSENSUS.0[&self.upgrade_state.current_protocol];
 
         // check round
         let round = basics::Round(prev.round.0 + 1);
@@ -336,13 +347,15 @@ impl BlockHeader {
         }
 
         // check the pointer to the previous block
-        if self.branch != hash_obj(&prev) {
+        if self.branch != hash_obj(prev) {
             //return fmt.Errorf("block branch incorrect %v != %v", self.branch, prev.Hash())
             return Err(());
         }
 
         // check upgrade state
-        let next_upgrade_state = prev.upgrade_state.apply_upgrade_vote(round, self.upgrade_vote)?;
+        let next_upgrade_state = prev
+            .upgrade_state
+            .apply_upgrade_vote(round, &self.upgrade_vote)?;
         if next_upgrade_state != self.upgrade_state {
             //return fmt.Errorf("UpgradeState mismatch: %v != %v", next_upgrade_state, self.upgrade_state)
             return Err(());
@@ -356,7 +369,7 @@ impl BlockHeader {
             if self.timestamp < prev.timestamp {
                 //return fmt.Errorf("bad timestamp: current %v < previous %v", self.timestamp, prev.timestamp)
                 return Err(());
-            } else if self.timestamp > prev.timestamp+params.max_timestamp_increment {
+            } else if self.timestamp > prev.timestamp + params.max_timestamp_increment {
                 //return fmt.Errorf("bad timestamp: current %v > previous %v, max increment = %v ", self.timestamp, prev.timestamp, params.max_timestamp_increment)
                 return Err(());
             }
@@ -395,21 +408,34 @@ impl BlockHeader {
     /// Returns information about the next expected protocol version
     /// (the ConsensusVersion object, the round in whichh it is supposed to switch on, and whether it is supported).
     /// If no upgrade is scheduled, return the current protocol.
-    pub fn next_version_info(&self) -> (protocol::ConsensusVersion, basics::Round, bool) {
+    pub fn next_version_info(&self) -> (Option<protocol::ConsensusVersion>, basics::Round, bool) {
         // TODO handle supported check with enum (maybe introduce `Unsupported` enum variant
         //_, supported = config.Consensus[ver]
-        if self.round >= self.upgrade_state.next_protocol_vote_before && self.round < self.upgrade_state.next_protocol_switch_on {
-            (self.upgrade_state.next_protocol, self.upgrade_state.next_protocol_switch_on, true)
+        if self.round >= self.upgrade_state.next_protocol_vote_before
+            && self.round < self.upgrade_state.next_protocol_switch_on
+        {
+            (
+                self.upgrade_state.next_protocol,
+                self.upgrade_state.next_protocol_switch_on,
+                true,
+            )
         } else {
-            (self.upgrade_state.current_protocol, basics::Round(self.round.0 + 1), true)
+            (
+                Some(self.upgrade_state.current_protocol),
+                basics::Round(self.round.0 + 1),
+                true,
+            )
         }
     }
 
     /// Converts a `SignedTxInBlock` from a block to a `SignedTxWithAD`.
-    pub fn decode_signed_tx(&self, stb: &transactions::SignedTxInBlock) -> Result<transactions::SignedTxWithAD, ()> {
-        let mut stad = transactions::SignedTxWithAD::default();
+    pub fn decode_signed_tx(
+        &self,
+        stb: &transactions::SignedTxInBlock,
+    ) -> Result<transactions::SignedTxWithAD, ()> {
+        let mut stad = stb.tx.clone();
 
-        let proto = config::CONSENSUS.0[&self.upgrade_state.current_protocol];
+        let proto = &config::CONSENSUS.0[&self.upgrade_state.current_protocol];
         if !proto.support_signed_tx_in_block {
             return Ok(stad);
         }
@@ -420,7 +446,7 @@ impl BlockHeader {
         }
 
         if stb.has_genesis_id {
-            stad.tx.tx.header().genesis_id = self.genesis_id;
+            stad.tx.tx.header_mut().genesis_id = self.genesis_id.clone();
         }
 
         if stb.tx.tx.tx.header().genesis_hash != Default::default() {
@@ -433,10 +459,10 @@ impl BlockHeader {
                 //return fmt.Errorf("HasGenesisHash set to true but RequireGenesisHash obviates the flag")
                 return Err(());
             }
-            stb.tx.tx.tx.header().genesis_hash = self.genesis_hash;
+            stad.tx.tx.header_mut().genesis_hash = self.genesis_hash.clone();
         } else {
             if stb.has_genesis_hash {
-                stb.tx.tx.tx.header().genesis_hash = self.genesis_hash
+                stad.tx.tx.header_mut().genesis_hash = self.genesis_hash.clone();
             }
         }
 
@@ -444,30 +470,39 @@ impl BlockHeader {
     }
 
     /// Converts a `SignedTxWithAD` into a `SignedTxInBlock` for this block.
-    pub fn encode_signed_tx(&self, stad: transactions::SignedTxWithAD) -> Result<transactions::SignedTxInBlock, ()> {
-        let stb = transactions::SignedTxInBlock::default();
+    pub fn encode_signed_tx(
+        &self,
+        mut st: transactions::SignedTx,
+        ad: transactions::ApplyData,
+    ) -> Result<transactions::SignedTxInBlock, ()> {
+        let mut has_genesis_id = false;
+        let mut has_genesis_hash = false;
 
-        let proto = config::CONSENSUS.0[&self.upgrade_state.current_protocol];
+        let proto = &config::CONSENSUS.0[&self.upgrade_state.current_protocol];
         if !proto.support_signed_tx_in_block {
-            stb.tx = stad.tx;
-            return Ok(stb);
+            let stad = transactions::SignedTxWithAD { tx: st, ad };
+            return Ok(transactions::SignedTxInBlock {
+                tx: stad,
+                has_genesis_id,
+                has_genesis_hash,
+            });
         }
 
-        if stad.tx.tx.header().genesis_id != "" {
-            if stad.tx.tx.header().genesis_id == self.genesis_id {
-                stad.tx.tx.header().genesis_id = "".to_owned();
-                stb.has_genesis_id = true;
+        if st.tx.header().genesis_id != "" {
+            if st.tx.header().genesis_id == self.genesis_id {
+                st.tx.header_mut().genesis_id = "".to_owned();
+                has_genesis_id = true;
             } else {
                 //return fmt.Errorf("GenesisID mismatch: %s != %s", st.Txn.GenesisID, bh.GenesisID)
                 return Err(());
             }
         }
 
-        if stad.tx.tx.header().genesis_hash != Default::default() {
-            if stad.tx.tx.header().genesis_hash == self.genesis_hash {
-                stad.tx.tx.header().genesis_hash = Default::default();
+        if st.tx.header().genesis_hash != Default::default() {
+            if st.tx.header().genesis_hash == self.genesis_hash {
+                st.tx.header_mut().genesis_hash = Default::default();
                 if !proto.require_genesis_hash {
-                    stb.has_genesis_hash = true;
+                    has_genesis_hash = true;
                 }
             } else {
                 //return fmt.Errorf("GenesisHash mismatch: %v != %v", st.Txn.GenesisHash, bh.GenesisHash)
@@ -480,19 +515,29 @@ impl BlockHeader {
             }
         }
 
-        stb.tx = stad;
-        return Ok(stb);
+        let stad = transactions::SignedTxWithAD { tx: st, ad };
+        return Ok(transactions::SignedTxInBlock {
+            tx: stad,
+            has_genesis_id,
+            has_genesis_hash,
+        });
     }
 }
 
 impl RewardsState {
     /// Computes the RewardsState of the subsequent round given the subsequent consensus parameters,
     /// along with the incentive pool balance and the total reward units in the system as of the current round.
-    pub fn next_state(&self, next_round: basics::Round, next_proto: config::ConsensusParams, incentive_pool_balance: basics::MicroAlgos, total_reward_units: u64) -> Self {
-        let next_state = self.clone();
+    pub fn next_state(
+        &self,
+        next_round: basics::Round,
+        next_proto: config::ConsensusParams,
+        incentive_pool_balance: basics::MicroAlgos,
+        total_reward_units: u64,
+    ) -> Self {
+        let mut next_state = self.clone();
 
         if next_round == self.rewards_recalculation_round {
-            let max_spent_over = next_proto.min_balance;
+            let mut max_spent_over = next_proto.min_balance;
 
             if next_proto.pending_residue_rewards {
                 match max_spent_over.checked_add(self.rewards_residue) {
@@ -501,7 +546,7 @@ impl RewardsState {
                         error!("overflowed when trying to accumulate min_balance({}) and rewards_residue({}) for round {} (state {:?})", next_proto.min_balance, self.rewards_residue, next_round, self);
                         // this should never happen, but if it does, adjust the maxSpentOver so that we will have no rewards.
                         max_spent_over = incentive_pool_balance.0;
-                    },
+                    }
                 }
             }
 
@@ -509,13 +554,17 @@ impl RewardsState {
             let new_rate = match incentive_pool_balance.0.checked_add(max_spent_over) {
                 Some(n) => n,
                 None => {
-                    error!("overflowed when trying to refresh rewards_rate for round {} (state {:?})", next_round, self);
+                    error!(
+                        "overflowed when trying to refresh rewards_rate for round {} (state {:?})",
+                        next_round, self
+                    );
                     0
-                },
+                }
             };
 
             next_state.rewards_rate = new_rate / next_proto.rewards_rate_refresh_interval;
-            next_state.rewards_recalculation_round = next_round + basics::Round(next_proto.rewards_rate_refresh_interval);
+            next_state.rewards_recalculation_round =
+                next_round + basics::Round(next_proto.rewards_rate_refresh_interval);
         }
 
         if total_reward_units == 0 {
@@ -531,7 +580,9 @@ impl RewardsState {
             return next_state;
         }
 
-        let next_reward_level = self.rewards_level.checked_add(rewards_with_residue.unwrap() / total_reward_units);
+        let next_reward_level = self
+            .rewards_level
+            .checked_add(rewards_with_residue.unwrap() / total_reward_units);
 
         if next_reward_level.is_none() {
             error!("could not compute next reward level (current level {}, adding {} in total, number of reward units {}) using old level",
@@ -553,13 +604,17 @@ impl UpgradeState {
     /// This function returns an error if the input is not valid in prev_state:
     /// that is, if UpgradePropose shows up when there is already an active proposal,
     /// or if UpgradeApprove shows up if there is no active proposal being voted on.
-    fn apply_upgrade_vote(&mut self, round: basics::Round, vote: UpgradeVote) -> Result<UpgradeState, ()> {
+    fn apply_upgrade_vote(
+        &mut self,
+        round: basics::Round,
+        vote: &UpgradeVote,
+    ) -> Result<UpgradeState, ()> {
         // Locate the config parameters for current protocol
-        let params = config::CONSENSUS.0[&self.current_protocol];
+        let params = &config::CONSENSUS.0[&self.current_protocol];
 
         // Apply proposal of upgrade to new protocol
         if vote.upgrade_propose != self.current_protocol {
-            if self.next_protocol != self.current_protocol {
+            if self.next_protocol != Some(self.current_protocol) {
                 //err = fmt.Errorf("applyUpgradeVote: new proposal during existing proposal")
                 return Err(());
             }
@@ -571,8 +626,10 @@ impl UpgradeState {
             }
             */
 
-            let upgrade_delay = vote.upgrade_delay as u64;
-            if upgrade_delay > params.max_upgrade_wait_rounds || upgrade_delay < params.min_upgrade_wait_rounds {
+            let mut upgrade_delay = vote.upgrade_delay.0;
+            if upgrade_delay > params.max_upgrade_wait_rounds
+                || upgrade_delay < params.min_upgrade_wait_rounds
+            {
                 //err = fmt.Errorf("applyUpgradeVote: proposed upgrade wait rounds %d out of permissible range [%d, %d]", upgradeDelay, params.MinUpgradeWaitRounds, params.MaxUpgradeWaitRounds)
                 return Err(());
             }
@@ -581,12 +638,13 @@ impl UpgradeState {
                 upgrade_delay = params.default_upgrade_wait_rounds;
             }
 
-            self.next_protocol = vote.upgrade_propose;
+            self.next_protocol = Some(vote.upgrade_propose);
             self.next_protocol_approvals = 0;
             self.next_protocol_vote_before = basics::Round(round.0 + params.upgrade_vote_rounds);
-            self.next_protocol_switch_on = basics::Round(round.0 + params.upgrade_vote_rounds + upgrade_delay);
+            self.next_protocol_switch_on =
+                basics::Round(round.0 + params.upgrade_vote_rounds + upgrade_delay);
         } else {
-            if vote.upgrade_delay != 0 {
+            if vote.upgrade_delay != basics::Round(0) {
                 //err = fmt.Errorf("applyUpgradeVote: upgrade delay %d nonzero when not proposing", vote.UpgradeDelay)
                 return Err(());
             }
@@ -594,7 +652,7 @@ impl UpgradeState {
 
         // Apply approval of existing protocol upgrade
         if vote.upgrade_approve {
-            if self.next_protocol == self.current_protocol {
+            if self.next_protocol == Some(self.current_protocol) {
                 //err = fmt.Errorf("applyUpgradeVote: approval without an active proposal")
                 return Err(());
             }
@@ -608,8 +666,10 @@ impl UpgradeState {
         }
 
         // Clear out failed proposal
-        if round == self.next_protocol_vote_before && self.next_protocol_approvals < params.upgrade_threshold {
-            self.next_protocol = self.next_protocol
+        if round == self.next_protocol_vote_before
+            && self.next_protocol_approvals < params.upgrade_threshold
+        {
+            self.next_protocol = self.next_protocol;
             self.next_protocol_approvals = 0;
             self.next_protocol_vote_before = basics::Round(0);
             self.next_protocol_switch_on = basics::Round(0);
@@ -617,7 +677,7 @@ impl UpgradeState {
 
         // Switch over to new approved protocol
         if round == self.next_protocol_switch_on {
-            self.current_protocol = self.next_protocol;
+            self.current_protocol = self.next_protocol.unwrap();
             self.next_protocol = self.next_protocol;
             self.next_protocol_approvals = 0;
             self.next_protocol_vote_before = basics::Round(0);
@@ -629,62 +689,71 @@ impl UpgradeState {
 }
 
 /// Determines our upgrade vote, applies it, and returns the generated `UpgradeVote` and the new `UpgradeState`.
-pub fn process_upgrade_params(prev: &BlockHeader) -> Result<(UpgradeVote, UpgradeState), ()> {
+// TODO should `prev` be mut, ref, or mut ref
+pub fn process_upgrade_params(prev: &mut BlockHeader) -> Result<(UpgradeVote, UpgradeState), ()> {
     // Find parameters for current protocol; panic if not supported
-    let prev_params = config::CONSENSUS.0[&prev.upgrade_state.current_protocol];
+    let prev_params = &config::CONSENSUS.0[&prev.upgrade_state.current_protocol];
 
     // Decide on the votes for protocol upgrades
-    let upgradeVote = UpgradeVote::default();
+    let mut upgrade_vote = UpgradeVote::default();
 
     // If there is no upgrade proposal, see if we can make one
-    if prev.next_protocol == "" {
-        for (k, v) in range prev_params.approved_upgrades {
-            upgradeVote.upgrade_propose = k
-            upgradeVote.upgrade_delay = basics.Round(v)
-            upgradeVote.upgrade_approve = true
-            break
+    if prev.upgrade_state.next_protocol.is_none() {
+        if let Some((&k, &v)) = prev_params.approved_upgrades.iter().next() {
+            upgrade_vote.upgrade_propose = k;
+            upgrade_vote.upgrade_delay = basics::Round(v);
+            upgrade_vote.upgrade_approve = true;
         }
     }
 
     // If there is a proposal being voted on, see if we approve it
-    let round = prev.round + 1;
-    if round < prev.next_protocol_vote_before {
-        upgrade_vote.upgrade_approve = prev_params.approved_upgrades.contains(&prev.next_protocol);
+    let round = prev.round + basics::Round(1);
+    if round < prev.upgrade_state.next_protocol_vote_before {
+        upgrade_vote.upgrade_approve = prev_params
+            .approved_upgrades
+            .contains_key(&prev.upgrade_state.next_protocol.unwrap());
     }
 
-    let upgrade_state, err = prev.upgrade_state.apply_upgrade_vote(round, upgrade_vote);
-    if err != nil {
+    let upgrade_state = prev
+        .upgrade_state
+        .apply_upgrade_vote(round, &upgrade_vote)?;
+    /*if err != nil {
         err = fmt.Errorf("constructed invalid upgrade vote %v for round %v in state %v: %v", upgradeVote, round, prev.UpgradeState, err)
         return
-    }
+    }*/
 
-    return Ok(upgrade_vote, upgrade_state);
+    return Ok((upgrade_vote, upgrade_state));
 }
 
 /// Splits a slice of `SignedTx`s into groups.
 pub fn signed_txs_to_group(txs: &[transactions::SignedTx]) -> Vec<Vec<transactions::SignedTx>> {
-    let res = Vec::new();
-	let last_group: Vec<transactions::SignedTx> = Vec::new();
+    let mut res = Vec::new();
+    let mut last_group: Vec<transactions::SignedTx> = Vec::new();
     for tx in txs {
-		if !last_group.is_empty() && (last_group[0].tx.header().group != tx.tx.header().group || last_group[0].tx.header().group.is_zero()) {
-			res.push(last_group.drain(..).collect())
-		}
+        if !last_group.is_empty()
+            && (last_group[0].tx.header().group != tx.tx.header().group
+                || last_group[0].tx.header().group.is_zero())
+        {
+            res.push(last_group.drain(..).collect())
+        }
 
-		last_group.push(tx.clone());
-	}
-	if !last_group.is_empty() {
-		res.push(last_group);
-	}
-	return res
+        last_group.push(tx.clone());
+    }
+    if !last_group.is_empty() {
+        res.push(last_group);
+    }
+    return res;
 }
 
 /// Combines all groups into a flat slice of `SignedTx`s.
-pub fn signed_tx_groups_flatten(tx_groups: Vec<Vec<transactions::SignedTx>>) -> Vec<transactions::SignedTx> {
-    let res = Vec::new();
+pub fn signed_tx_groups_flatten(
+    tx_groups: Vec<Vec<transactions::SignedTx>>,
+) -> Vec<transactions::SignedTx> {
+    let mut res = Vec::new();
     for tx_group in &tx_groups {
         res.extend_from_slice(&tx_group);
-	}
-	return res;
+    }
+    return res;
 }
 
 impl Hashable for BlockHeader {

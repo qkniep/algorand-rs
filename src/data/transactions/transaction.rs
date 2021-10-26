@@ -203,6 +203,18 @@ impl Transaction {
         }
     }
 
+    pub fn header_mut(&mut self) -> &mut Header {
+        match self {
+            Self::Keyreg(header, _) => header,
+            Self::Payment(header, _) => header,
+            Self::AssetConfig(header, _) => header,
+            Self::AssetTransfer(header, _) => header,
+            Self::AssetFreeze(header, _) => header,
+            Self::AppCall(header, _) => header,
+            Self::CompactCert(header, _) => header,
+        }
+    }
+
     /// Checks if the transaction involves a given address.
     fn match_address(&self, addr: basics::Address, spec: SpecialAddresses) -> bool {
         self.relevant_addrs(&spec).contains(&addr)

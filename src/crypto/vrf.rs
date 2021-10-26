@@ -33,7 +33,7 @@ pub struct VrfKeypair {
     public: VrfPublicKey,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VrfPublicKey([u8; 32]);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
