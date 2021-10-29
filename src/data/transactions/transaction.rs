@@ -37,44 +37,75 @@ pub struct SpecialAddresses {
     pub rewards_pool: basics::Address,
 }
 
+fn is_default<T: Default + PartialEq>(t: &T) -> bool {
+    t == &T::default()
+}
+
 /// Captures the fields common to every transaction type.
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Header {
+    #[serde(rename = "snd", default, skip_serializing_if = "is_default")]
     pub sender: basics::Address,
+    #[serde(rename = "fee", default, skip_serializing_if = "is_default")]
     pub fee: basics::MicroAlgos,
+    #[serde(rename = "fv", default, skip_serializing_if = "is_default")]
     pub first_valid: basics::Round,
+    #[serde(rename = "lv", default, skip_serializing_if = "is_default")]
     pub last_valid: basics::Round,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub note: Vec<u8>,
+    #[serde(rename = "gen", default, skip_serializing_if = "is_default")]
     pub genesis_id: String,
+    #[serde(rename = "gh", default, skip_serializing_if = "is_default")]
     pub genesis_hash: CryptoHash,
 
     /// Specifies that this transaction is part of a transaction group
     /// (and, if so, specifies the hash of the transaction group).
+    #[serde(rename = "grp", default, skip_serializing_if = "is_default")]
     pub group: CryptoHash,
 
     /// Enforces mutual exclusion of transactions.
     /// If this field is nonzero, then once the transaction is confirmed, it acquires the
     /// lease identified by the pair (sender, lease) until the last_valid round passes.
     /// While this transaction possesses the lease, no other transaction with this lease can be confirmed.
+    #[serde(rename = "lx", default, skip_serializing_if = "is_default")]
     pub lease: [u8; 32],
 
     /// If nonzero, sets the sender's `auth_addr` to the given address.
     /// If the `rekey_to` address is the sender's actual address, the `auth_addr` is set to zero.
     /// This allows "re-keying" a long-lived account -- rotating the signing key,
     /// changing membership of a multisig account, etc.
+    #[serde(rename = "rekey", default, skip_serializing_if = "is_default")]
     pub rekey_to: basics::Address,
 }
 
 /// Describes a transaction that can appear in a block.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Transaction {
-    Keyreg(Header, KeyregFields),
-    Payment(Header, PaymentFields),
-    AssetConfig(Header, AssetConfigFields),
-    AssetTransfer(Header, AssetTransferFields),
-    AssetFreeze(Header, AssetFreezeFields),
-    AppCall(Header, AppCallFields),
-    CompactCert(Header, CompactCertFields),
+pub struct Transaction {
+    #[serde(flatten)]
+    pub header: Header,
+
+    #[serde(flatten)]
+    pub fields: TxFields,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum TxFields {
+    #[serde(rename = "keyreg")]
+    Keyreg(KeyregFields),
+    #[serde(rename = "pay")]
+    Payment(PaymentFields),
+    #[serde(rename = "acfg")]
+    AssetConfig(AssetConfigFields),
+    #[serde(rename = "axfer")]
+    AssetTransfer(AssetTransferFields),
+    #[serde(rename = "afrz")]
+    AssetFreeze(AssetFreezeFields),
+    #[serde(rename = "appl")]
+    AppCall(AppCallFields),
+    #[serde(rename = "cert")]
+    CompactCert(CompactCertFields),
 }
 
 impl Hashable for Transaction {
@@ -167,9 +198,7 @@ impl Header {
 impl Transaction {
     /// Returns the TxID (i.e. cryptographic hash) of the transaction.
     pub fn id(&self) -> TxID {
-        // TODO include protocol::TRANSACTION
-        let enc = protocol::encode(self);
-        TxID(hash(&enc))
+        TxID(hash_obj(self))
     }
 
     /// Signs this transaction using a given account's secrets.
@@ -184,35 +213,11 @@ impl Transaction {
         };
 
         // Set the `auth_addr` if the signing key doesn't match the transaction sender.
-        if basics::Address(kp.public.to_bytes()) != self.header().sender {
+        if basics::Address(kp.public.to_bytes()) != self.header.sender {
             s.auth_addr = basics::Address(kp.public.to_bytes());
         }
 
         s
-    }
-
-    pub fn header(&self) -> &Header {
-        match self {
-            Self::Keyreg(header, _) => header,
-            Self::Payment(header, _) => header,
-            Self::AssetConfig(header, _) => header,
-            Self::AssetTransfer(header, _) => header,
-            Self::AssetFreeze(header, _) => header,
-            Self::AppCall(header, _) => header,
-            Self::CompactCert(header, _) => header,
-        }
-    }
-
-    pub fn header_mut(&mut self) -> &mut Header {
-        match self {
-            Self::Keyreg(header, _) => header,
-            Self::Payment(header, _) => header,
-            Self::AssetConfig(header, _) => header,
-            Self::AssetTransfer(header, _) => header,
-            Self::AssetFreeze(header, _) => header,
-            Self::AppCall(header, _) => header,
-            Self::CompactCert(header, _) => header,
-        }
     }
 
     /// Checks if the transaction involves a given address.
@@ -227,14 +232,14 @@ impl Transaction {
         spec: &SpecialAddresses,
         proto: &config::ConsensusParams,
     ) -> Result<(), InvalidTx> {
-        match self {
-            Self::Payment(header, fields) => {
+        match &self.fields {
+            TxFields::Payment(fields) => {
                 // In case that the fee sink is spending, check that this spend is to a valid address.
-                fields.check_spender(header, spec, proto)?;
+                fields.check_spender(&self.header, spec, proto)?;
             }
-            Self::Keyreg(header, fields) => {
+            TxFields::Keyreg(fields) => {
                 if proto.enable_keyreg_coherency_check {
-                    fields.check_coherency(header)?;
+                    fields.check_coherency(&self.header)?;
                 }
 
                 // Check that, if this tx is marking an account nonparticipating,
@@ -252,12 +257,12 @@ impl Transaction {
                     }
                 }
             }
-            Self::AssetConfig(_, _) | Self::AssetTransfer(_, _) | Self::AssetFreeze(_, _) => {
+            TxFields::AssetConfig(_) | TxFields::AssetTransfer(_) | TxFields::AssetFreeze(_) => {
                 if !proto.asset {
                     return Err(InvalidTx::AssetTxsNotSupported);
                 }
             }
-            Self::AppCall(_, fields) => {
+            TxFields::AppCall(fields) => {
                 if !proto.application {
                     return Err(InvalidTx::AppTxsNotSupported);
                 }
@@ -364,7 +369,7 @@ impl Transaction {
                     return Err(InvalidTx::Unknown);
                 }
             }
-            Self::CompactCert(header, _) => {
+            TxFields::CompactCert(_) => {
                 if proto.compact_cert_rounds == 0 {
                     return Err(InvalidTx::CompactcertTxsNotSupported);
                 }
@@ -373,22 +378,22 @@ impl Transaction {
                 // and ensure they are broadly available.
                 // Most of the fields must be empty.
                 // It must be issued from a special sender address.
-                if header.sender != *COMPACT_CERT_SENDER {
+                if self.header.sender != *COMPACT_CERT_SENDER {
                     //return fmt.Errorf("sender must be the compact-cert sender");
                     return Err(InvalidTx::Unknown);
-                } else if !header.fee.is_zero() {
+                } else if !self.header.fee.is_zero() {
                     //return fmt.Errorf("fee must be zero");
                     return Err(InvalidTx::Unknown);
-                } else if !header.note.is_empty() {
+                } else if !self.header.note.is_empty() {
                     //return fmt.Errorf("note must be empty");
                     return Err(InvalidTx::Unknown);
-                } else if !header.group.is_zero() {
+                } else if !self.header.group.is_zero() {
                     //return fmt.Errorf("group must be zero");
                     return Err(InvalidTx::Unknown);
-                } else if !header.rekey_to.is_zero() {
+                } else if !self.header.rekey_to.is_zero() {
                     //return fmt.Errorf("rekey must be zero");
                     return Err(InvalidTx::Unknown);
-                } else if header.lease != [0; 32] {
+                } else if self.header.lease != [0; 32] {
                     //return fmt.Errorf("lease must be zero");
                     return Err(InvalidTx::Unknown);
                 }
@@ -432,34 +437,34 @@ impl Transaction {
         }
         */
 
-        if !proto.enable_fee_pooling && self.header().fee <= basics::MicroAlgos(proto.min_tx_fee) {
-            if let Self::CompactCert(_, _) = self {
+        if !proto.enable_fee_pooling && self.header.fee <= basics::MicroAlgos(proto.min_tx_fee) {
+            if let TxFields::CompactCert(_) = &self.fields {
                 // Zero fee allowed for compact cert txn.
             } else {
                 return Err(InvalidTx::FeeLessThanMin(
-                    self.header().fee,
+                    self.header.fee,
                     basics::MicroAlgos(proto.min_tx_fee),
                 ));
             }
         }
-        if self.header().last_valid < self.header().first_valid {
+        if self.header.last_valid < self.header.first_valid {
             return Err(InvalidTx::BadValidityRange(
-                self.header().first_valid,
-                self.header().last_valid,
+                self.header.first_valid,
+                self.header.last_valid,
             ));
-        } else if self.header().last_valid.0 - self.header().first_valid.0 > proto.max_tx_life {
+        } else if self.header.last_valid.0 - self.header.first_valid.0 > proto.max_tx_life {
             return Err(InvalidTx::ExcessiveValidityRange(
-                self.header().first_valid,
-                self.header().last_valid,
+                self.header.first_valid,
+                self.header.last_valid,
             ));
-        } else if self.header().note.len() as u64 > proto.max_tx_note_bytes as u64 {
+        } else if self.header.note.len() as u64 > proto.max_tx_note_bytes as u64 {
             return Err(InvalidTx::NoteTooBig(
-                self.header().note.len(),
+                self.header.note.len(),
                 proto.max_tx_note_bytes,
             ));
         }
 
-        if let Self::AssetConfig(_, fields) = self {
+        if let TxFields::AssetConfig(fields) = &self.fields {
             if fields.asset_params.asset_name.len() as u64 > proto.max_asset_name_bytes as u64 {
                 return Err(InvalidTx::AssetNameTooBig(
                     fields.asset_params.asset_name.len(),
@@ -485,16 +490,16 @@ impl Transaction {
             }
         }
 
-        if self.header().sender == spec.rewards_pool {
+        if self.header.sender == spec.rewards_pool {
             // this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool
             unreachable!("transaction from incentive pool");
-        } else if self.header().sender.is_zero() {
+        } else if self.header.sender.is_zero() {
             Err(InvalidTx::ZeroSender)
-        } else if !proto.support_transaction_leases && (self.header().lease != [0; 32]) {
+        } else if !proto.support_transaction_leases && (self.header.lease != [0; 32]) {
             Err(InvalidTx::LeasesNotSupported)
-        } else if !proto.support_tx_groups && (!self.header().group.is_zero()) {
+        } else if !proto.support_tx_groups && (!self.header.group.is_zero()) {
             Err(InvalidTx::GroupsNotSupported)
-        } else if !proto.support_rekeying && (!self.header().rekey_to.is_zero()) {
+        } else if !proto.support_rekeying && (!self.header.rekey_to.is_zero()) {
             Err(InvalidTx::RekeyingNotSupported)
         } else {
             Ok(())
@@ -504,16 +509,16 @@ impl Transaction {
     /// Returns the addresses whose balance records this transaction will need to access.
     /// The header's default is to return just the sender and the fee sink.
     fn relevant_addrs(&self, spec: &SpecialAddresses) -> Vec<basics::Address> {
-        let mut addrs = vec![self.header().sender, spec.fee_sink];
+        let mut addrs = vec![self.header.sender, spec.fee_sink];
 
-        match self {
-            Self::Payment(_, fields) => {
+        match &self.fields {
+            TxFields::Payment(fields) => {
                 addrs.push(fields.receiver);
                 if let Some(close_to) = fields.close_remainder_to {
                     addrs.push(close_to);
                 }
             }
-            Self::AssetTransfer(_, fields) => {
+            TxFields::AssetTransfer(fields) => {
                 addrs.push(fields.asset_receiver);
                 if !fields.asset_close_to.is_zero() {
                     addrs.push(fields.asset_close_to);
@@ -530,17 +535,17 @@ impl Transaction {
 
     /// Returns the amount paid to the recipient in this payment.
     fn tx_amount(&self) -> basics::MicroAlgos {
-        match self {
-            Self::Payment(_, fields) => fields.amount,
+        match &self.fields {
+            TxFields::Payment(fields) => fields.amount,
             _ => basics::MicroAlgos(0),
         }
     }
 
     /// Returns the address of the receiver. If the transaction has no receiver, it returns the empty address.
     fn get_receiver_rddress(&self) -> Option<basics::Address> {
-        match self {
-            Self::Payment(_, fields) => Some(fields.receiver),
-            Self::AssetTransfer(_, fields) => Some(fields.asset_receiver),
+        match &self.fields {
+            TxFields::Payment(fields) => Some(fields.receiver),
+            TxFields::AssetTransfer(fields) => Some(fields.asset_receiver),
             _ => None,
         }
     }

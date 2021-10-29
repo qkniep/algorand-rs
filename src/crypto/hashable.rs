@@ -16,6 +16,7 @@ pub const HASH_LEN: usize = 32;
 
 /// Represents a 32-byte (256-bit) value holding a hash digest.
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct CryptoHash(pub [u8; HASH_LEN]);
 
 #[derive(Error, Debug)]

@@ -18,14 +18,21 @@ pub enum PaymentError {
     CannotCloseFeeSink,
 }
 
+fn is_default<T: Default + PartialEq>(t: &T) -> bool {
+    t == &T::default()
+}
+
 /// The fields used by payment transactions.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PaymentFields {
+    #[serde(rename = "rcv", default, skip_serializing_if = "is_default")]
     pub receiver: basics::Address,
+    #[serde(rename = "amt", default, skip_serializing_if = "is_default")]
     pub amount: basics::MicroAlgos,
 
     /// When `close_remainder_to` is set, the transaction is requesting that the account should be closed,
     /// and all remaining funds be transferred to this address.
+    #[serde(rename = "close", default, skip_serializing_if = "is_default")]
     pub close_remainder_to: Option<basics::Address>,
 }
 

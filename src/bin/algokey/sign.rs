@@ -39,7 +39,7 @@ impl SignCmd {
 
         // sign tx
         let mut sig_tx = tx.sign(&kp);
-        if sig_tx.tx.header().sender != basics::Address(kp.public.to_bytes()) {
+        if sig_tx.tx.header.sender != basics::Address(kp.public.to_bytes()) {
             sig_tx.auth_addr = basics::Address(kp.public.to_bytes());
         }
 

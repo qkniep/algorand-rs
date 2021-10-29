@@ -16,6 +16,7 @@ cargo build
 ## Roadmap
 - [ ] finish porting go-algorand
 - [ ] setup Concourse CI or Drone.io
+- [ ] improve msgpack performance
 
 ## License
 

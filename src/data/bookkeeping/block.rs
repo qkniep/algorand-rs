@@ -7,6 +7,7 @@ use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
 
+use super::TxMerkleArray;
 use crate::config;
 use crate::crypto::{self, hashable::*};
 use crate::data::{basics, committee, transactions};
@@ -16,7 +17,7 @@ use crate::protocol;
 // TODO ConsensusVersion and String...
 
 /// A Block contains the Payset and metadata corresponding to a given Round.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Block {
     pub header: BlockHeader,
     pub payset: transactions::Payset,
@@ -304,8 +305,8 @@ impl Block {
             let stxad = self.header.decode_signed_tx(txib)?;
 
             if !last_group.is_empty()
-                && (last_group[0].tx.tx.header().group != stxad.tx.tx.header().group
-                    || last_group[0].tx.tx.header().group.is_zero())
+                && (last_group[0].tx.tx.header.group != stxad.tx.tx.header.group
+                    || last_group[0].tx.tx.header.group.is_zero())
             {
                 res.push(last_group.drain(..).collect());
             }
@@ -329,7 +330,7 @@ impl Block {
     }
 
     pub fn tx_merkle_tree(&self) -> Result<crypto::merklearray::Tree, ()> {
-        unimplemented!();
+        crypto::merklearray::Tree::from_block(self)
     }
 }
 
@@ -440,16 +441,16 @@ impl BlockHeader {
             return Ok(stad);
         }
 
-        if stb.tx.tx.tx.header().genesis_id != "" {
+        if stb.tx.tx.tx.header.genesis_id != "" {
             //return Err(fmt.Errorf("GenesisID <%s> not empty", st.Txn.GenesisID));
             return Err(());
         }
 
         if stb.has_genesis_id {
-            stad.tx.tx.header_mut().genesis_id = self.genesis_id.clone();
+            stad.tx.tx.header.genesis_id = self.genesis_id.clone();
         }
 
-        if stb.tx.tx.tx.header().genesis_hash != Default::default() {
+        if stb.tx.tx.tx.header.genesis_hash != Default::default() {
             //return fmt.Errorf("GenesisHash <%v> not empty", st.Txn.GenesisHash)
             return Err(());
         }
@@ -459,10 +460,10 @@ impl BlockHeader {
                 //return fmt.Errorf("HasGenesisHash set to true but RequireGenesisHash obviates the flag")
                 return Err(());
             }
-            stad.tx.tx.header_mut().genesis_hash = self.genesis_hash.clone();
+            stad.tx.tx.header.genesis_hash = self.genesis_hash.clone();
         } else {
             if stb.has_genesis_hash {
-                stad.tx.tx.header_mut().genesis_hash = self.genesis_hash.clone();
+                stad.tx.tx.header.genesis_hash = self.genesis_hash.clone();
             }
         }
 
@@ -488,9 +489,9 @@ impl BlockHeader {
             });
         }
 
-        if st.tx.header().genesis_id != "" {
-            if st.tx.header().genesis_id == self.genesis_id {
-                st.tx.header_mut().genesis_id = "".to_owned();
+        if st.tx.header.genesis_id != "" {
+            if st.tx.header.genesis_id == self.genesis_id {
+                st.tx.header.genesis_id = "".to_owned();
                 has_genesis_id = true;
             } else {
                 //return fmt.Errorf("GenesisID mismatch: %s != %s", st.Txn.GenesisID, bh.GenesisID)
@@ -498,9 +499,9 @@ impl BlockHeader {
             }
         }
 
-        if st.tx.header().genesis_hash != Default::default() {
-            if st.tx.header().genesis_hash == self.genesis_hash {
-                st.tx.header_mut().genesis_hash = Default::default();
+        if st.tx.header.genesis_hash != Default::default() {
+            if st.tx.header.genesis_hash == self.genesis_hash {
+                st.tx.header.genesis_hash = Default::default();
                 if !proto.require_genesis_hash {
                     has_genesis_hash = true;
                 }
@@ -731,8 +732,8 @@ pub fn signed_txs_to_group(txs: &[transactions::SignedTx]) -> Vec<Vec<transactio
     let mut last_group: Vec<transactions::SignedTx> = Vec::new();
     for tx in txs {
         if !last_group.is_empty()
-            && (last_group[0].tx.header().group != tx.tx.header().group
-                || last_group[0].tx.header().group.is_zero())
+            && (last_group[0].tx.header.group != tx.tx.header.group
+                || last_group[0].tx.header.group.is_zero())
         {
             res.push(last_group.drain(..).collect())
         }

@@ -155,8 +155,8 @@ impl Participation {
         last_valid: basics::Round,
         lease: [u8; 32],
     ) -> transactions::Transaction {
-        transactions::Transaction::Keyreg(
-            transactions::Header {
+        transactions::Transaction {
+            header: transactions::Header {
                 sender: self.parent,
                 fee,
                 first_valid,
@@ -164,15 +164,15 @@ impl Participation {
                 lease,
                 ..Default::default()
             },
-            transactions::KeyregFields {
+            fields: transactions::TxFields::Keyreg(transactions::KeyregFields {
                 vote_pk: self.voting.verifier,
                 selection_pk: self.vrf.public(),
                 vote_first: self.first_valid,
                 vote_last: self.last_valid,
                 vote_key_dilution: self.key_dilution,
                 nonparticipation: false,
-            },
-        )
+            }),
+        }
     }
 
     pub fn restore() -> Result<Self, Error> {

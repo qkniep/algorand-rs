@@ -10,9 +10,11 @@ use crate::protocol;
 /// Represents a common, unforgeable, consistent, ordered set of SignedTxn objects.
 //msgp:allocbound Payset 100000
 #[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Payset(pub Vec<SignedTxInBlock>);
 
 // TODO there was some weird differentiation between nil and zero-length paysets in go-algorand
+//      this is what the currently unused `genesis` flag is for
 
 impl Payset {
     /// Returns a commitment to the Payset, as a flat array.
@@ -31,7 +33,6 @@ impl Payset {
 }
 
 impl Hashable for Payset {
-    // ToBeHashed implements the crypto.Hashable interface
     fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>) {
         (protocol::PAYSET_FLAT, protocol::encode(&self))
     }

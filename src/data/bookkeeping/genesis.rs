@@ -1,4 +1,4 @@
-// Copyright (C) 2021 qkniep <qkniep@qk-huawei>
+// Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
 use std::collections::HashMap;
@@ -171,7 +171,7 @@ impl GenesisBalances {
         fee_sink: basics::Address,
         rewards_pool: basics::Address,
     ) -> Self {
-        let mut timestamp = SystemTime::now()
+        let timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();

@@ -20,8 +20,8 @@ fn estimate_encoded_size() {
     rng.fill_bytes(&mut buf);
 
     let proto = &config::CONSENSUS.0[&protocol::CURRENT_CONSENSUS_VERSION];
-    let tx = Transaction::Payment(
-        Header {
+    let tx = Transaction {
+        header: Header {
             sender: addr,
             fee: basics::MicroAlgos(100),
             first_valid: basics::Round(1000),
@@ -33,12 +33,12 @@ fn estimate_encoded_size() {
             lease: [0; 32],
             rekey_to: basics::Address([0; 32]),
         },
-        PaymentFields {
+        fields: TxFields::Payment(PaymentFields {
             receiver: addr,
             amount: basics::MicroAlgos(100),
             close_remainder_to: None,
-        },
-    );
+        }),
+    };
 
     assert_eq!(tx.estimate_encoded_size(), 200);
 }
@@ -58,17 +58,17 @@ fn go_online_go_nonparticipating_contradiction() {
     let mut seed = [0; 32];
     rng.fill_bytes(&mut seed);
     let vrf = crypto::VrfKeypair::from_seed(seed);
-    tx = Transaction::Keyreg(
-        tx.header().clone(),
-        KeyregFields {
+    tx = Transaction {
+        header: tx.header.clone(),
+        fields: TxFields::Keyreg(KeyregFields {
             vote_pk: v.verifier,
             selection_pk: vrf.public(),
             vote_first: Default::default(),
             vote_last: Default::default(),
             vote_key_dilution: 0,
             nonparticipation: true,
-        },
-    );
+        }),
+    };
     // This tx tries to both register keys to go online, and mark an account as non-participating.
     // It is not well-formed.
     let fee_sink = basics::Address([
@@ -155,78 +155,78 @@ fn app_call_create_well_formed() {
         .unwrap();
     let usecases = vec![
         TestCase {
-            tx: Transaction::AppCall(
-                Header {
+            tx: Transaction {
+                header: Header {
                     sender: addr1,
                     fee: basics::MicroAlgos(1000),
                     first_valid: basics::Round(100),
                     last_valid: basics::Round(105),
                     ..Default::default()
                 },
-                AppCallFields {
+                fields: TxFields::AppCall(AppCallFields {
                     application_id: basics::AppIndex(0),
                     application_args: vec![b"write".to_vec()],
                     ..Default::default()
-                },
-            ),
+                }),
+            },
             spec: special_addr,
             proto: cur_proto,
             expected_error: None,
         },
         TestCase {
-            tx: Transaction::AppCall(
-                Header {
+            tx: Transaction {
+                header: Header {
                     sender: addr1,
                     fee: basics::MicroAlgos(1000),
                     first_valid: basics::Round(100),
                     last_valid: basics::Round(105),
                     ..Default::default()
                 },
-                AppCallFields {
+                fields: TxFields::AppCall(AppCallFields {
                     application_id: basics::AppIndex(0),
                     application_args: vec![b"write".to_vec()],
                     ..Default::default()
-                },
-            ),
+                }),
+            },
             spec: special_addr,
             proto: cur_proto,
             expected_error: None,
         },
         TestCase {
-            tx: Transaction::AppCall(
-                Header {
+            tx: Transaction {
+                header: Header {
                     sender: addr1,
                     fee: basics::MicroAlgos(1000),
                     first_valid: basics::Round(100),
                     last_valid: basics::Round(105),
                     ..Default::default()
                 },
-                AppCallFields {
+                fields: TxFields::AppCall(AppCallFields {
                     application_id: basics::AppIndex(0),
                     application_args: vec![b"write".to_vec()],
                     extra_program_pages: 3,
                     ..Default::default()
-                },
-            ),
+                }),
+            },
             spec: special_addr,
             proto: future_proto,
             expected_error: None,
         },
         TestCase {
-            tx: Transaction::AppCall(
-                Header {
+            tx: Transaction {
+                header: Header {
                     sender: addr1,
                     fee: basics::MicroAlgos(1000),
                     first_valid: basics::Round(100),
                     last_valid: basics::Round(105),
                     ..Default::default()
                 },
-                AppCallFields {
+                fields: TxFields::AppCall(AppCallFields {
                     application_id: basics::AppIndex(0),
                     application_args: vec![b"write".to_vec()],
                     ..Default::default()
-                },
-            ),
+                }),
+            },
             spec: special_addr,
             proto: future_proto,
             expected_error: None,
@@ -247,8 +247,8 @@ fn generate_dummy_go_nonparticpating_tx(addr: basics::Address) -> Transaction {
     rng.fill_bytes(&mut buf);
 
     let proto = &config::CONSENSUS.0[&protocol::CURRENT_CONSENSUS_VERSION];
-    return Transaction::Keyreg(
-        Header {
+    return Transaction {
+        header: Header {
             sender: addr,
             fee: basics::MicroAlgos(proto.min_tx_fee),
             first_valid: basics::Round(1),
@@ -260,13 +260,13 @@ fn generate_dummy_go_nonparticpating_tx(addr: basics::Address) -> Transaction {
             lease: [0; 32],
             rekey_to: basics::Address([0; 32]),
         },
-        KeyregFields {
+        fields: TxFields::Keyreg(KeyregFields {
             nonparticipation: true,
             vote_first: basics::Round(0),
             vote_last: basics::Round(0),
             vote_key_dilution: 0,
             vote_pk: Default::default(),
             selection_pk: Default::default(),
-        },
-    );
+        }),
+    };
 }

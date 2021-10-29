@@ -3,9 +3,11 @@
 
 use std::collections::{HashMap, VecDeque};
 
+use rayon::prelude::*;
+
 use super::partial::*;
 use super::*;
-use crate::crypto::hashable::*;
+use crate::{crypto::hashable::*, data::bookkeeping::Block, protocol};
 
 const MAX_HEIGHT: usize = 64;
 
@@ -18,9 +20,41 @@ pub struct Tree {
 
 impl Tree {
     /// Constructs a Merkle tree given an array.
-    pub fn from_array(array: &[impl Hashable]) -> Result<Self, ()> {
+    pub fn from_array<H: Hashable + Sync>(array: &[H]) -> Result<Self, ()> {
+        let leaves = array.par_iter().map(|h| hash_obj(h)).collect();
+
         let mut tree = Self {
-            levels: vec![Layer(array.iter().map(|h| hash_obj(h)).collect())],
+            levels: vec![Layer(leaves)],
+        };
+
+        while tree.top_layer().0.len() > 1 {
+            tree.levels.push(tree.top_layer().up());
+        }
+
+        Ok(tree)
+    }
+
+    /// Constructs a Merkle tree given an array.
+    pub fn from_block(block: &Block) -> Result<Self, ()> {
+        let leaves = block
+            .payset
+            .0
+            .par_iter()
+            .map(|stib| {
+                let stad = block.header.decode_signed_tx(stib).unwrap();
+                let txid = stad.tx.tx.id();
+                let stib = hash_obj(stib);
+
+                let mut buf = [0; 2 * HASH_LEN];
+                buf[..HASH_LEN].copy_from_slice(&txid.0 .0);
+                buf[HASH_LEN..].copy_from_slice(&stib.0);
+
+                hash(&[protocol::TX_MERKLE_LEAF.as_bytes(), &buf].concat())
+            })
+            .collect();
+
+        let mut tree = Self {
+            levels: vec![Layer(leaves)],
         };
 
         while tree.top_layer().0.len() > 1 {

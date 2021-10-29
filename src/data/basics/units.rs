@@ -15,6 +15,7 @@ pub type RoundInterval = u64;
 /// Main unit of currency. It is wrapped in a struct to nudge
 /// developers to use an overflow-checking library for any arithmetic.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct MicroAlgos(pub u64);
 
 /// A protocol round index.

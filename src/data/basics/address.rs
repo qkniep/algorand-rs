@@ -5,7 +5,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use data_encoding::BASE32_NOPAD;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha512Trunc256};
 use thiserror::Error;
 
@@ -23,8 +23,14 @@ pub enum AddressError {
     InvalidChecksum,
 }
 
-#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Deserialize)]
 pub struct Address(pub [u8; 32]);
+
+impl Serialize for Address {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(&self.0)
+    }
+}
 
 impl Address {
     pub fn new(hash: crypto::CryptoHash) -> Self {

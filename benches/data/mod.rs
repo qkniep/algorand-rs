@@ -3,8 +3,10 @@
 
 mod account;
 mod basics;
+mod bookkeeping;
 mod committee;
 
 pub use account::*;
 pub use basics::*;
+pub use bookkeeping::*;
 pub use committee::*;
