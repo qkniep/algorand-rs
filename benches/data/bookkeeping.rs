@@ -48,7 +48,6 @@ pub fn tx_roots(c: &mut Criterion) {
         if (i % 1024 == 0)
             && protocol::encode(&blk.payset).len() >= proto.max_tx_bytes_per_block as usize
         {
-            println!("{} TXs in block", i);
             break;
         }
     }
