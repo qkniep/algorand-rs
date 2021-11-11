@@ -223,9 +223,9 @@ mod tests {
         let storage = InMemoryStorage::default();
         let mut trie = Trie::new(storage);
 
-        // create 10,000 hashes.
-        let leaves = 10_000;
-        let mut hashes = Vec::with_capacity(10_000);
+        // create 1,000 hashes.
+        let leaves = 1000;
+        let mut hashes = Vec::with_capacity(1000);
         for i in 0..leaves {
             hashes.push(hash(&[(i % 256) as u8, (i / 256) as u8]));
         }
