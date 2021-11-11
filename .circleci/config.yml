@@ -6,6 +6,5 @@ workflows:
   production:
     jobs:
       - rust/lint-test-build:
-          version: '1.56.0'
+          version: '1.56.1'
           release: true
-          working_directory: ~/algorsand
