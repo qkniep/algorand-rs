@@ -1,7 +1,7 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
-use criterion::{BatchSize, Criterion};
+use criterion::Criterion;
 use rand::{thread_rng, RngCore};
 
 use algorsand::data::{basics, bookkeeping::Block, transactions};

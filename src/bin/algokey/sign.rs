@@ -9,7 +9,7 @@ use clap::{AppSettings, Parser};
 use ed25519_dalek::{Keypair, SECRET_KEY_LENGTH};
 
 use algorsand::crypto::mnemonic;
-use algorsand::data::{basics, transactions::*};
+use algorsand::data::{basics, transactions::Transaction};
 
 #[derive(Parser)]
 #[clap(setting = AppSettings::ArgRequiredElseHelp)]
@@ -50,14 +50,14 @@ impl SignCmd {
 }
 
 fn load_keyfile_or_mnemonic(keyfile: &str, mnemonic: &str) -> [u8; SECRET_KEY_LENGTH] {
-    if keyfile != "" && mnemonic != "" {
+    if !keyfile.is_empty() && !mnemonic.is_empty() {
         eprintln!("Must specify one of keyfile or mnemonic");
         std::process::exit(1);
     }
 
-    if keyfile != "" {
+    if !keyfile.is_empty() {
         return load_sk(&keyfile).unwrap();
-    } else if mnemonic != "" {
+    } else if !mnemonic.is_empty() {
         return mnemonic::phrase_to_key(mnemonic).unwrap();
     }
 
@@ -69,5 +69,5 @@ fn load_sk(filename: &impl AsRef<Path>) -> io::Result<[u8; SECRET_KEY_LENGTH]> {
     let mut buf = [0; SECRET_KEY_LENGTH];
     let mut f = fs::File::open(filename)?;
     f.read_exact(&mut buf)?;
-    return Ok(buf);
+    Ok(buf)
 }

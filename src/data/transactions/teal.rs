@@ -5,18 +5,17 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::*;
+use super::SignedTxWithAD;
 use crate::data::basics;
 
-/// EvalDelta stores StateDeltas for an application's global key/value store, as
-/// well as StateDeltas for some number of accounts holding local state for that
-/// application
+/// Stores `StateDelta`s for an application's global key/value store, as well as
+/// `StateDelta`s for some number of accounts holding local state for that application
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvalDelta {
     pub global_delta: basics::StateDelta,
 
     /// When decoding EvalDeltas, the integer key represents an offset into
-    /// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]
+    /// `[txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]`.
     pub local_deltas: HashMap<u64, basics::StateDelta>,
 
     pub logs: Vec<String>,

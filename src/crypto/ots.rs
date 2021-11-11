@@ -67,7 +67,7 @@ pub struct OTSSubkeyBatchID {
     pub batch: u64,
 }
 
-/// Identifies an EphemeralSubkey of a specific offset within a batch,
+/// Identifies an `EphemeralSubkey` of a specific offset within a batch,
 /// for the purposes of signing it with the batch subkey.
 #[derive(Serialize, Deserialize)]
 pub struct OTSSubkeyOffsetID {
@@ -111,7 +111,7 @@ pub struct OTSSecrets {
 
 impl OTSSecrets {
     /// Creates a limited number of secrets that sign messages under `OTSIdentifier`s in the range
-    /// [start_batch, start_batch+num_batches), i.e. including start_batch and excludes start_batch+num_batches.
+    /// `[start_batch, start_batch+num_batches)`, i.e. including `start_batch` and excluding `start_batch+num_batches`.
     pub fn generate(start_batch: u64, num_batches: u64) -> OTSSecrets {
         let kp = Keypair::generate(&mut OsRng {});
         let mut subkeys = VecDeque::with_capacity(num_batches.try_into().unwrap());
@@ -145,7 +145,7 @@ impl OTSSecrets {
         }
     }
 
-    /// Produces a OTS of some Hashable message under some OTSIdentifier.
+    /// Produces a OTS of some `Hashable` message under some `OTSIdentifier`.
     pub fn sign(&self, id: &OTSIdentifier, message: &impl Hashable) -> OTS {
         let _guard = self.lock.read();
 
@@ -293,8 +293,9 @@ impl OTSSecrets {
         self.batches.pop_front();
     }
 
-    /// Returns a copy of OTSSecrets consistent with respect to concurrent mutating calls (specifically, delete_before).
-    /// This snapshot can be used for serializing the OTSSecrets to persistent storage.
+    /// Returns a copy of `OTSSecrets` consistent with respect to concurrent mutating calls
+    /// (specifically, `delete_before`).
+    /// This snapshot can be used for serializing the `OTSSecrets` to persistent storage.
     pub fn snapshot(&self) -> Self {
         let _guard = self.lock.read();
         // TODO move into a Clone impl on OTSSecrets?
@@ -313,10 +314,8 @@ impl OTSSecrets {
 }
 
 impl OTS {
-    /// Verifies that some Hashable signature was signed under some
-    /// OneTimeSignatureVerifier and some OneTimeSignatureIdentifier.
-    ///
-    /// It returns true if this is the case; otherwise, it returns false.
+    /// Verifies that some Hashable signature was signed under some `OTSVerifier` and some `OTSIdentifier`.
+    /// Returns true iff this is the case.
     pub fn verify(&self, id: &OTSIdentifier, msg: &impl Hashable, pk: &OTSVerifier) -> bool {
         let offset_id = OTSSubkeyOffsetID {
             sub_key_pk: self.pk,

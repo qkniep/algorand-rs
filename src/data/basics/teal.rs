@@ -23,7 +23,7 @@ pub enum DeltaAction {
     Delete,
 }
 
-/// Links a DeltaAction with a value to be set.
+/// Links a `DeltaAction` with a value to be set.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValueDelta {
     pub action: DeltaAction,
@@ -32,7 +32,7 @@ pub struct ValueDelta {
 }
 
 impl ValueDelta {
-    /// Converts a ValueDelta into a TealValue if possible, and returns None if the conversion is not possible.
+    /// Converts a `ValueDelta` into a `TealValue` if possible, and returns `None` if the conversion is not possible.
     fn to_teal_value(&self) -> Option<TealValue> {
         match self.action {
             DeltaAction::SetBytes => Some(TealValue::new_bytes(self.bytes.clone())),
@@ -42,7 +42,7 @@ impl ValueDelta {
     }
 }
 
-/// Map from key/value store keys to ValueDeltas, indicating what should happen for that key.
+/// Map from key/value store keys to `ValueDelta`s, indicating what should happen for that key.
 //msgp:allocbound StateDelta config.MaxStateDeltaKeys
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StateDelta(HashMap<String, ValueDelta>);
@@ -74,7 +74,7 @@ fn (sd StateDelta) Equal(o StateDelta) bool {
 */
 
 impl StateDelta {
-    /// Checks whether the keys and values in a StateDelta conform to the consensus parameters' maximum lengths.
+    /// Checks whether the keys and values in a `StateDelta` conform to the consensus parameters' maximum lengths.
     // TODO return Result<(), X> instead  of bool?
     pub fn is_valid(&self, proto: config::ConsensusParams) -> bool {
         if !self.0.is_empty() && proto.max_app_key_len == 0 {
@@ -113,7 +113,7 @@ pub struct StateSchema {
 }
 
 impl StateSchema {
-    /// Adds two StateSchemas together.
+    /// Adds two `StateSchema`s together.
     pub fn add_schema(&self, other: Self) -> Self {
         Self {
             num_uint: self.num_uint.saturating_add(other.num_uint),
@@ -121,7 +121,7 @@ impl StateSchema {
         }
     }
 
-    /// Subtracts one StateSchema from another.
+    /// Subtracts one `StateSchema` from another.
     pub fn sub_schema(&self, other: StateSchema) -> StateSchema {
         Self {
             num_uint: self.num_uint.saturating_sub(other.num_uint),
@@ -136,7 +136,7 @@ impl StateSchema {
             .saturating_add(self.num_byte_slice)
     }
 
-    /// Computes the min balance requirements for a StateSchema based on the consensus parameters.
+    /// Computes the min balance requirements for a `StateSchema` based on the consensus parameters.
     pub fn min_balance(&self, proto: &config::ConsensusParams) -> MicroAlgos {
         // Flat cost for each key/value pair
         let flat_cost = proto
@@ -206,7 +206,7 @@ impl TealValue {
         }
     }
 
-    /// Creates ValueDelta from TealValue.
+    /// Creates `ValueDelta` from `TealValue`.
     pub fn to_value_delta(&self) -> ValueDelta {
         match self.teal_type {
             TealType::Uint => ValueDelta {
@@ -238,7 +238,7 @@ impl fmt::Display for TealValue {
 pub struct TealKeyValue(HashMap<String, TealValue>);
 
 impl TealKeyValue {
-    /// Calculates the number of each value type in a TealKeyValue and represents the result as a StateSchema.
+    /// Calculates the number of each value type in a `TealKeyValue` and represents the result as a `StateSchema`.
     pub fn to_state_schema(&self) -> StateSchema {
         let mut schema = StateSchema::default();
         for value in self.0.values() {

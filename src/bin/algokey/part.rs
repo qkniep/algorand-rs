@@ -90,7 +90,7 @@ impl PartGenerateCmd {
         );
 
         match res {
-            Ok(part_key) => print_participation_key(part_key),
+            Ok(part_key) => print_participation_key(&part_key),
             Err(e) => {
                 eprintln!("Failed to create participation key: {}", e);
                 std::process::exit(1);
@@ -104,7 +104,7 @@ impl PartInfoCmd {
         let res = account::Participation::restore();
 
         match res {
-            Ok(part_key) => print_participation_key(part_key),
+            Ok(part_key) => print_participation_key(&part_key),
             Err(e) => {
                 eprintln!("Failed to load participation key: {}", e);
                 std::process::exit(1);
@@ -128,7 +128,7 @@ impl PartReparentCmd {
         part_key.parent = parent;
 
         match part_key.persist_new_parent() {
-            Ok(_) => print_participation_key(part_key),
+            Ok(_) => print_participation_key(&part_key),
             Err(e) => {
                 eprintln!("Failed to store participation key: {}", e);
                 std::process::exit(1);
@@ -137,7 +137,7 @@ impl PartReparentCmd {
     }
 }
 
-fn print_participation_key(part_key: account::Participation) {
+fn print_participation_key(part_key: &account::Participation) {
     let voting_pk = BASE64.encode(part_key.voting.verifier.as_bytes());
     println!("Parent address: {}", part_key.parent);
     println!("VRF public key: {}", part_key.vrf.public());

@@ -12,7 +12,7 @@ use crate::crypto;
 use crate::data::{account, basics, bookkeeping};
 use crate::protocol;
 
-/// A ParticipationKeyIdentity defines the parameters that makes a pariticpation key unique.
+/// Defines the parameters that makes a participation key unique.
 struct ParticipationKeyIdentity {
     pub address: basics::Address, // the address this participation key is used to vote for.
 
@@ -24,7 +24,7 @@ struct ParticipationKeyIdentity {
     pub selection_id: crypto::VrfPublicKey,
 }
 
-/// AccountManager loads and manages accounts for the node
+/// Loads and manages accounts for the node.
 #[derive(Default)]
 struct AccountManager {
     mu: Mutex<()>,

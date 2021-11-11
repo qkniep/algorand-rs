@@ -15,9 +15,9 @@ pub const NODE_ID_BASE: NodeID = 0x4160;
 pub const MAX_NODE_SERIALIZED_SIZE: usize = 3000;
 
 /// Version of the encoded trie.
-pub const MERKLE_TRIE_VERSION: u64 = 0x1000000010000000;
+pub const MERKLE_TRIE_VERSION: u64 = 0x1000_0000_1000_0000;
 /// Version of the encoded node.
-pub const NODE_PAGE_VERSION: u64 = 0x1000000010000000;
+pub const NODE_PAGE_VERSION: u64 = 0x1000_0000_1000_0000;
 
 #[derive(Debug, Error)]
 pub enum TrieError {
@@ -94,7 +94,7 @@ impl Trie {
         //self.cache.begin_transaction(&mut self);
         match pnode.add(&mut self.cache, d, &Vec::new()) {
             Ok(updated_root) => {
-                self.cache.delete_node(self.root.unwrap());
+                self.cache.delete_node(self.root.unwrap())?;
                 self.root = Some(updated_root);
                 //self.cache.commit_transaction();
                 Ok(true)

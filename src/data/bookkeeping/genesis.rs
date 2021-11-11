@@ -60,14 +60,14 @@ struct Genesis {
     /// Defines whether this network operates in a developer mode or not.
     /// Developer mode networks are a single node network, that operates without the agreement service being active.
     /// In liue of the agreement service, a new block is generated each time a node receives a transaction group.
-    /// The default value for this field is "false", which makes this field empty from it's encoding,
+    /// The default value for this field is `false`, which makes this field empty from it's encoding,
     /// and therefore backward compatible.
     pub dev_mode: bool,
 }
 
 impl Genesis {
-    // MakeGenesisBlock creates a genesis block, including setup of RewardsState.
-    fn new(
+    /// Creates a genesis block, including setup of `RewardsState`.
+    fn create_block(
         proto: protocol::ConsensusVersion,
         gen_bal: GenesisBalances,
         id: &str,

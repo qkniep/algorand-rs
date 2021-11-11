@@ -35,7 +35,7 @@ impl ExportCmd {
         println!("Private key mnemonic: {}", words.join(" "));
         println!("Public key: {}", pk_chk);
 
-        if self.pk_file != "" {
+        if !self.pk_file.is_empty() {
             if let Err(e) = write_pk(&self.pk_file, pk_chk.as_bytes()) {
                 println!("[Error] Could not write public key to file: {}", e);
             }
@@ -47,7 +47,7 @@ fn load_sk(filename: &impl AsRef<Path>) -> io::Result<[u8; SECRET_KEY_LENGTH]> {
     let mut buf = [0; SECRET_KEY_LENGTH];
     let mut f = fs::File::open(filename)?;
     f.read_exact(&mut buf)?;
-    return Ok(buf);
+    Ok(buf)
 }
 
 fn write_pk(filename: &impl AsRef<Path>, data: &[u8]) -> io::Result<()> {
@@ -58,6 +58,5 @@ fn write_pk(filename: &impl AsRef<Path>, data: &[u8]) -> io::Result<()> {
         .truncate(true)
         .mode(0o666)
         .open(filename)?;
-    f.write_all(data)?;
-    return Ok(());
+    f.write_all(data)
 }

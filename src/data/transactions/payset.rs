@@ -4,20 +4,17 @@
 use serde::{Deserialize, Serialize};
 
 use super::*;
-use crate::crypto::hashable::*;
+use crate::crypto::hashable::{hash_obj, CryptoHash, Hashable};
 use crate::protocol;
 
-/// Represents a common, unforgeable, consistent, ordered set of SignedTxn objects.
+/// Represents a common, unforgeable, consistent, ordered set of `SignedTxInBlock` objects.
 //msgp:allocbound Payset 100000
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Payset(pub Vec<SignedTxInBlock>);
 
-// TODO there was some weird differentiation between nil and zero-length paysets in go-algorand
-//      this is what the currently unused `genesis` flag is for
-
 impl Payset {
-    /// Returns a commitment to the Payset, as a flat array.
+    /// Returns a commitment to the `Payset`, as a flat array.
     pub fn commit_flat(&self) -> CryptoHash {
         self.commit(false)
     }
@@ -26,7 +23,9 @@ impl Payset {
         self.commit(true)
     }
 
-    /// Handles the logic for both Commit and CommitGenesis.
+    /// Handles the logic for both `commit_flat()` and `commit_genesis()`.
+    // TODO there was some weird differentiation between nil and zero-length paysets in go-algorand
+    //      this is what the currently unused `genesis` flag is for
     fn commit(&self, genesis: bool) -> CryptoHash {
         hash_obj(self)
     }

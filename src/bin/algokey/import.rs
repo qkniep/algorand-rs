@@ -40,13 +40,13 @@ impl ImportCmd {
         println!("Private key mnemonic: {}", self.mnemonic);
         println!("Public key: {}", pk_chk);
 
-        if self.sk_file != "" {
+        if !self.sk_file.is_empty() {
             if let Err(e) = write_sk(&self.sk_file, seed.as_ref().unwrap()) {
                 println!("[Error] Could not write private key to file: {}", e);
             }
         }
 
-        if self.pk_file != "" {
+        if !self.pk_file.is_empty() {
             if let Err(e) = write_pk(&self.pk_file, pk_chk.as_bytes()) {
                 println!("[Error] Could not write public key to file: {}", e);
             }
@@ -62,8 +62,7 @@ fn write_sk(filename: &impl AsRef<Path>, data: &[u8]) -> io::Result<()> {
         .truncate(true)
         .mode(0o600)
         .open(filename)?;
-    f.write_all(data)?;
-    return Ok(());
+    f.write_all(data)
 }
 
 fn write_pk(filename: &impl AsRef<Path>, data: &[u8]) -> io::Result<()> {
@@ -74,6 +73,5 @@ fn write_pk(filename: &impl AsRef<Path>, data: &[u8]) -> io::Result<()> {
         .truncate(true)
         .mode(0o666)
         .open(filename)?;
-    f.write_all(data)?;
-    return Ok(());
+    f.write_all(data)
 }

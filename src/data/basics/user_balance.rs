@@ -12,7 +12,7 @@ use crate::config;
 use crate::crypto::{self, hashable::Hashable};
 use crate::protocol;
 
-/// Delegation status of an account's MicroAlgos.
+/// Delegation status of an account's `MicroAlgos`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Status {
     /// Indicates that the associated account receives rewards but does not participate in the consensus.
@@ -160,7 +160,7 @@ pub struct AccountData {
     /// the account that created the asset plus a unique counter
     /// to distinguish re-created assets.
     ///
-    /// Each asset bumps the required MinBalance in this account.
+    /// Each asset bumps the required `min_balance` in this account.
     ///
     /// An account that creates an asset must have its own asset
     /// in the Assets map until that asset is destroyed.
@@ -182,9 +182,9 @@ pub struct AccountData {
     /// Stores the global parameters and state associated with any applications that this account has created.
     pub app_params: HashMap<AppIndex, AppParams>,
 
-    /// Stores the sum of all of the LocalStateSchemas and GlobalStateSchemas in this account
-    /// (global for applications we created local for applications we opted in to),
-    /// so that we don't have to iterate over all of them to compute MinBalance.
+    /// Stores the sum of all of the local `StateSchema`s and global `StateSchema`s in this account
+    /// (global for applications we created, local for applications we opted in to),
+    /// so that we don't have to iterate over all of them to compute `min_balance`.
     pub total_app_schema: StateSchema,
 
     /// Stores the extra length in pages (MaxAppProgramLen bytes per page) requested for app program by this account.
@@ -192,8 +192,8 @@ pub struct AccountData {
 }
 
 /// Stores the LocalState associated with an application.
-/// It also stores a cached copy of the application's LocalStateSchema so that MinBalance requirements may be computed:
-///   1) without looking up the AppParams, and
+/// It also stores a cached copy of the application's local `StateSchema` so that `min_balance` requirements may be computed:
+///   1) without looking up the `AppParams`, and
 ///   2) even if the application has been deleted
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AppLocalState {
@@ -211,7 +211,7 @@ pub struct AppParams {
     pub extra_program_pages: u32,
 }
 
-/// Thin wrapper around the LocalStateSchema and the GlobalStateSchema, since they are often needed together.
+/// Thin wrapper around the local `StateSchema` and the global `StateSchema`, since they are often needed together.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct StateSchemas {
     pub local_state_schema: StateSchema,
@@ -263,25 +263,22 @@ struct BalanceDetail {
 }
 
 /// Unique integer index of an asset that can be used to look up the creator of the asset,
-/// whose balance record contains the AssetParams.
+/// whose balance record contains the `AssetParams`.
 pub type AssetIndex = u64;
 
 /// Unique integer index of an application that can be used to look up the creator of the application,
-/// whose balance record contains the AppParams.
+/// whose balance record contains the `AppParams`.
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AppIndex(pub u64);
 
-/// Represents either an AssetIndex or AppIndex, which come from the same namespace of indices as each other
+/// Represents either an `AssetIndex` or `AppIndex`, which come from the same namespace of indices as each other
 /// (both assets and apps are "creatables")
 pub type CreatableIndex = u64;
 
 /// Represents whether or not a given creatable is an application or an asset
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CreatableType {
-    /// The CreatableType corresponding to assets
-    /// This value must be 0 to align with the applications database upgrade.
-    /// At migration time, we set the default 'ctype' column of the
-    /// creators table to 0 so that existing assets have the correct type.
+    /// The `CreatableType` corresponding to assets.
     AssetCreatable,
 
     /// The CreatableType corresponds to apps.
@@ -368,7 +365,7 @@ impl AccountData {
         }
     }
 
-    /// Returns the amount of MicroAlgos associated with the user's account.
+    /// Returns the amount of `MicroAlgos` associated with the user's account.
     fn money(
         &self,
         proto: &config::ConsensusParams,
@@ -378,7 +375,7 @@ impl AccountData {
         (e.micro_algos, e.rewarded_micro_algos)
     }
 
-    /// Computes the amount of rewards (in microalgos) that have yet to be added to the account balance.
+    /// Computes the amount of rewards (in `MicroAlgos`) that have yet to be added to the account balance.
     // TODO track overflow? (see go-algorand)
     fn pending_rewards(
         &self,
@@ -392,7 +389,7 @@ impl AccountData {
         MicroAlgos(rewards_units * rewards_delta)
     }
 
-    /// Returns an updated number of algos in an AccountData to reflect rewards up to some rewards level.
+    /// Returns an updated number of algos in an `AccountData` to reflect rewards up to some rewards level.
     // TODO should copy self, or is it fine to mutate?
     fn with_updated_rewards(
         &self,
@@ -415,33 +412,33 @@ impl AccountData {
     }
 
     /// Computes the minimum balance requirements for an account based on some consensus parameters.
-    /// MinBalance should correspond roughly to how much storage the account is allowed to store on disk.
+    /// `min_balance` should correspond roughly to how much storage the account is allowed to store on disk.
     fn min_balance(&self, proto: &config::ConsensusParams) -> MicroAlgos {
-        // First, base MinBalance
+        // First, base min balance
         let mut min = proto.min_balance;
 
-        // MinBalance for each Asset
+        // min balance for each Asset
         let asset_cost = proto.min_balance.saturating_mul(self.assets.len() as u64);
         min = min.saturating_add(asset_cost);
 
-        // Base MinBalance for each created application
+        // Base min balance for each created application
         let app_creation_cost = proto
             .app_flat_params_min_balance
             .saturating_mul(self.app_params.len() as u64);
         min = min.saturating_add(app_creation_cost);
 
-        // Base MinBalance for each opted in application
+        // Base min balance for each opted in application
         let app_opt_in_cost = proto
             .app_flat_opt_in_min_balance
             .saturating_mul(self.app_local_states.len() as u64);
         min = min.saturating_add(app_opt_in_cost);
 
-        // MinBalance for state usage measured by LocalStateSchemas and
+        // min balance for state usage measured by LocalStateSchemas and
         // GlobalStateSchemas
         let schema_cost = self.total_app_schema.min_balance(proto);
         min = min.saturating_add(schema_cost.to_u64());
 
-        // MinBalance for each extra app program page
+        // min balance for each extra app program page
         let extra_app_program_len_cost = proto
             .app_flat_params_min_balance
             .saturating_mul(self.total_extra_app_pages as u64);
@@ -450,7 +447,7 @@ impl AccountData {
         MicroAlgos(min)
     }
 
-    /// Returns the amount of MicroAlgos associated with the user's account
+    /// Returns the amount of `MicroAlgos` associated with the user's account
     /// for the purpose of participating in the Algorand protocol.
     /// It assumes the caller has already updated rewards appropriately using `with_updated_rewards()`.
     pub fn voting_stake(&self) -> MicroAlgos {

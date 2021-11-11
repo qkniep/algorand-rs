@@ -298,7 +298,7 @@ impl Block {
                     "Block::contents_match_header(): cannot compute commitment: {:?}",
                     err
                 );
-                return false;
+                false
             }
         }
     }
@@ -335,7 +335,7 @@ impl Block {
         for txib in &self.payset.0 {
             res.push(self.header.decode_signed_tx(txib)?);
         }
-        return Ok(res);
+        Ok(res)
     }
 
     /// Constructs a Merkle tree over this blocks `Payset`.
@@ -399,9 +399,9 @@ impl BlockHeader {
         }
 
         // Check genesis ID value against previous block, if set
-        if self.genesis_id == "" {
+        if self.genesis_id.is_empty() {
             return Err(InvalidBlock::MissingGenesisID);
-        } else if prev.genesis_id != "" && self.genesis_id != prev.genesis_id {
+        } else if !prev.genesis_id.is_empty() && self.genesis_id != prev.genesis_id {
             return Err(InvalidBlock::GenesisIDMismatch(
                 self.genesis_id.clone(),
                 prev.genesis_id.clone(),
@@ -461,7 +461,7 @@ impl BlockHeader {
             return Ok(stad);
         }
 
-        if stb.tx.tx.tx.header.genesis_id != "" {
+        if !stb.tx.tx.tx.header.genesis_id.is_empty() {
             return Err(InvalidBlock::NonEmptyGenesisID);
         }
 
@@ -504,7 +504,7 @@ impl BlockHeader {
             });
         }
 
-        if st.tx.header.genesis_id != "" {
+        if !st.tx.header.genesis_id.is_empty() {
             if st.tx.header.genesis_id == self.genesis_id {
                 st.tx.header.genesis_id = "".to_owned();
                 has_genesis_id = true;
@@ -528,18 +528,16 @@ impl BlockHeader {
                     st.tx.header.genesis_hash,
                 ));
             }
-        } else {
-            if proto.require_genesis_hash {
-                return Err(InvalidBlock::MissingGenesisHash);
-            }
+        } else if proto.require_genesis_hash {
+            return Err(InvalidBlock::MissingGenesisHash);
         }
 
         let stad = transactions::SignedTxWithAD { tx: st, ad };
-        return Ok(transactions::SignedTxInBlock {
+        Ok(transactions::SignedTxInBlock {
             tx: stad,
             has_genesis_id,
             has_genesis_hash,
-        });
+        })
     }
 }
 
@@ -611,7 +609,7 @@ impl RewardsState {
         let next_residue = rewards_with_residue.unwrap() % total_reward_units;
         next_state.rewards_level = next_reward_level.unwrap();
         next_state.rewards_residue = next_residue;
-        return next_state;
+        next_state
     }
 }
 
@@ -739,7 +737,7 @@ pub fn process_upgrade_params(
         return
     }*/
 
-    return Ok((upgrade_vote, upgrade_state));
+    Ok((upgrade_vote, upgrade_state))
 }
 
 /// Splits a slice of `SignedTx`s into groups.
@@ -759,23 +757,19 @@ pub fn signed_txs_to_group(txs: &[transactions::SignedTx]) -> Vec<Vec<transactio
     if !last_group.is_empty() {
         res.push(last_group);
     }
-    return res;
+    res
 }
 
 /// Combines all groups into a flat slice of `SignedTx`s.
 pub fn signed_tx_groups_flatten(
     tx_groups: Vec<Vec<transactions::SignedTx>>,
 ) -> Vec<transactions::SignedTx> {
-    let mut res = Vec::new();
-    for tx_group in &tx_groups {
-        res.extend_from_slice(&tx_group);
-    }
-    return res;
+    tx_groups.into_iter().flatten().collect()
 }
 
 impl Hashable for BlockHeader {
     /// ToBeHashed implements the crypto.Hashable interface
     fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>) {
-        return (protocol::BLOCK_HEADER, protocol::encode(&self));
+        (protocol::BLOCK_HEADER, protocol::encode(&self))
     }
 }

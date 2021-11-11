@@ -28,13 +28,13 @@ pub enum HashError {
 }
 
 /// A trait implemented by objects that can be turned into a sequence of bytes to be hashed.
-/// It needs also to provide a type ID (HashID) to distinguish different types of objects.
+/// It needs also to provide a type ID (`HashID`) to distinguish different types of objects.
 pub trait Hashable {
     fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>);
 
     fn hash_rep(&self) -> Vec<u8> {
         let (id, data) = self.to_be_hashed();
-        [id.as_bytes(), &data].concat().to_vec()
+        [id.as_bytes(), &data].concat()
     }
 }
 
@@ -45,7 +45,7 @@ impl Hashable for String {
 }
 
 impl CryptoHash {
-    /// Returns the leading 64 bits (i.e. the first 8 bytes) of the digest and converts to uint64.
+    /// Returns the leading 64 bits (i.e. the first 8 bytes) of the digest and converts to `u64`.
     pub fn trim_to_u64(&self) -> u64 {
         u64::from_le_bytes(self.0[..8].try_into().unwrap())
     }
@@ -63,7 +63,8 @@ impl fmt::Display for CryptoHash {
     }
 }
 
-/// DigestFromString converts a string to a CryptoHash
+/// Converts a string to a `CryptoHash` if possible.
+/// Fails for invalid base-32 encoding or mismatching length.
 impl TryFrom<&str> for CryptoHash {
     type Error = HashError;
 
@@ -81,7 +82,7 @@ pub fn hash(data: &[u8]) -> CryptoHash {
     CryptoHash(Sha512Trunc256::digest(data)[..].try_into().unwrap())
 }
 
-/// Computes a hash of a Hashable object and its type.
+/// Computes a hash of a `Hashable` object and its type.
 pub fn hash_obj(obj: &impl Hashable) -> CryptoHash {
     hash(&obj.hash_rep())
 }

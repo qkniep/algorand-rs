@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::*;
-use crate::crypto::{self, hashable::*};
+use crate::crypto::{self, hashable::Hashable};
 use crate::data::basics;
 use crate::protocol;
 
@@ -17,7 +17,8 @@ fn is_empty(s: &crypto::Signature) -> bool {
 }
 
 /// Wraps a transaction and a signature.
-/// It exposes a verify() method that verifies the signature and checks that the underlying transaction is well-formed.
+/// It exposes a `verify()` method that verifies the signature
+/// and checks that the underlying transaction is well-formed.
 // TODO: update this documentation now that there's multisig
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignedTx {
@@ -43,7 +44,7 @@ pub struct SignedTxInBlock {
     pub has_genesis_hash: bool,
 }
 
-/// A (decoded) SignedTx with associated ApplyData.
+/// A (decoded) `SignedTx` with associated `ApplyData`.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignedTxWithAD {
     pub tx: SignedTx,
@@ -52,7 +53,7 @@ pub struct SignedTxWithAD {
 }
 
 impl SignedTx {
-    /// ID returns the TxID (i.e., hash) of the underlying transaction.
+    /// ID returns the `TxID` (i.e., hash) of the underlying transaction.
     pub fn id(&self) -> TxID {
         self.tx.id()
     }
@@ -62,8 +63,8 @@ impl SignedTx {
         protocol::encode(self).len()
     }
 
-    /// Returns the address against which the signature/msig/lsig should be checked, or so the SignedTx claims.
-    /// This is just s.AuthAddr or, if s.auth_addr is zero, s.tx.sender.
+    /// Returns the address against which the signature/msig/lsig should be checked, or so the `SignedTx` claims.
+    /// This is just `self.auth_addr` or, if `self.auth_addr` is zero, `self.tx.sender`.
     /// It's provided as a convenience method.
     pub fn authorizer(&self) -> basics::Address {
         if self.auth_addr.is_zero() {
@@ -83,13 +84,12 @@ impl SignedTxInBlock {
 
 impl Hashable for SignedTxInBlock {
     fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>) {
-        //(protocol::SIGNED_TX_IN_BLOCK, protocol::encode(s))
-        (protocol::SIGNED_TX_IN_BLOCK, Vec::new())
+        (protocol::SIGNED_TX_IN_BLOCK, protocol::encode(self))
     }
 }
 
-/// Takes an array SignedTx and returns the same as SignedTxWithAD.
-/// Each TXs ApplyData is the default empty state.
+/// Takes a slice of `SignedTx`s and returns the same as a `Vec<SignedTxWithAD>`.
+/// Each TXs `ApplyData` is the default empty state.
 pub fn wrap_signed_txs_with_ad(tx_group: &[SignedTx]) -> Vec<SignedTxWithAD> {
     tx_group
         .iter()
@@ -101,6 +101,10 @@ pub fn wrap_signed_txs_with_ad(tx_group: &[SignedTx]) -> Vec<SignedTxWithAD> {
 }
 
 /// Computes the amount of fee credit that can be spent on inner TXs because it was more than required.
+///
+/// # Errors
+/// - XXX - integer overflow during calculation of `min_fee * min_fee_count`
+/// - XXX - total fees paid less than needed for TX group
 pub fn fee_credit(tx_group: &[SignedTx], min_fee: u64) -> Result<u64, ()> {
     let mut min_fee_count = 0;
     let mut fees_paid = 0_u64;

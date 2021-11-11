@@ -69,7 +69,7 @@ impl fmt::Display for Round {
 
 impl Round {
     /// Maps a round to the identifier for which ephemeral key should be used for that round.
-    /// key_dilution specifies the number of keys in the bottom-level of the two-level key structure.
+    /// `key_dilution` specifies the number of keys in the bottom-level of the two-level key structure.
     pub fn ots_id(&self, key_dilution: u64) -> crypto::OTSIdentifier {
         crypto::OTSIdentifier {
             batch: self.0 / key_dilution,

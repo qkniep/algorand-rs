@@ -1,9 +1,9 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
+/*
 use crate::{crypto, data::basics};
 
-/*
 /// Tests SelfCheckSelected (should always be true, with current testingenv parameters)
 /// and then set balance to 0 and test not SelfCheckSelected
 fn account_selected() {

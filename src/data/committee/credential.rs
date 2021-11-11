@@ -96,7 +96,7 @@ impl UnauthenticatedCredential {
 
         let mut weight = 0;
         let user_money = mem.record.data.voting_stake();
-        let expected_selection = mem.selector.committee_size(&proto);
+        let expected_selection = mem.selector.committee_size(proto);
 
         if mem.total_money < user_money {
             // TODO log panic

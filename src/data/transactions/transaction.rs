@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use super::*;
 use crate::config;
-use crate::crypto::{self, hashable::*};
+use crate::crypto;
+use crate::crypto::hashable::{hash_obj, CryptoHash, HashError, Hashable};
 use crate::data::basics;
 use crate::protocol;
 
@@ -196,7 +197,7 @@ impl Header {
 }
 
 impl Transaction {
-    /// Returns the TxID (i.e. cryptographic hash) of the transaction.
+    /// Returns the `TxID` (i.e. cryptographic hash) of the transaction.
     pub fn id(&self) -> TxID {
         TxID(hash_obj(self))
     }
@@ -221,8 +222,8 @@ impl Transaction {
     }
 
     /// Checks if the transaction involves a given address.
-    fn match_address(&self, addr: basics::Address, spec: SpecialAddresses) -> bool {
-        self.relevant_addrs(&spec).contains(&addr)
+    fn match_address(&self, addr: &basics::Address, spec: &SpecialAddresses) -> bool {
+        self.relevant_addrs(spec).contains(addr)
     }
 
     /// Checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger).
@@ -288,12 +289,12 @@ impl Transaction {
                     }
 
                     if proto.enable_extra_pages_on_app_update {
-                        effective_epp = proto.max_extra_app_program_pages as u32
+                        effective_epp = proto.max_extra_app_program_pages;
                     }
                 }
 
                 // Limit total number of arguments
-                if fields.application_args.len() as u64 > proto.max_app_args as u64 {
+                if fields.application_args.len() > proto.max_app_args as usize {
                     return Err(InvalidTx::TooManyAppArgs(
                         fields.application_args.len(),
                         proto.max_app_args,
@@ -362,7 +363,7 @@ impl Transaction {
                         ap_len,
                         pages * proto.max_app_program_len,
                     ));
-                } else if cs_len as u64 > pages as u64 * proto.max_app_program_len as u64 {
+                } else if cs_len > (pages * proto.max_app_program_len) as usize {
                     return Err(InvalidTx::ClearStateProgramTooLong(
                         cs_len,
                         pages * proto.max_app_program_len,
@@ -467,7 +468,7 @@ impl Transaction {
                 self.header.first_valid,
                 self.header.last_valid,
             ));
-        } else if self.header.note.len() as u64 > proto.max_tx_note_bytes as u64 {
+        } else if self.header.note.len() > proto.max_tx_note_bytes as usize {
             return Err(InvalidTx::NoteTooBig(
                 self.header.note.len(),
                 proto.max_tx_note_bytes,
@@ -475,19 +476,18 @@ impl Transaction {
         }
 
         if let TxFields::AssetConfig(fields) = &self.fields {
-            if fields.asset_params.asset_name.len() as u64 > proto.max_asset_name_bytes as u64 {
+            if fields.asset_params.asset_name.len() > proto.max_asset_name_bytes as usize {
                 return Err(InvalidTx::AssetNameTooBig(
                     fields.asset_params.asset_name.len(),
                     proto.max_asset_name_bytes,
                 ));
-            } else if fields.asset_params.unit_name.len() as u64
-                > proto.max_asset_unit_name_bytes as u64
+            } else if fields.asset_params.unit_name.len() > proto.max_asset_unit_name_bytes as usize
             {
                 return Err(InvalidTx::AssetUnitNameTooBig(
                     fields.asset_params.unit_name.len(),
                     proto.max_asset_unit_name_bytes,
                 ));
-            } else if fields.asset_params.url.len() as u64 > proto.max_asset_url_bytes as u64 {
+            } else if fields.asset_params.url.len() > proto.max_asset_url_bytes as usize {
                 return Err(InvalidTx::AssetUrlTooBig(
                     fields.asset_params.url.len(),
                     proto.max_asset_url_bytes,
@@ -551,8 +551,9 @@ impl Transaction {
         }
     }
 
-    /// Returns the address of the receiver. If the transaction has no receiver, it returns the empty address.
-    fn get_receiver_rddress(&self) -> Option<basics::Address> {
+    /// Returns the address of the receiver.
+    /// If the transaction has no receiver, it returns `None`.
+    fn get_receiver_address(&self) -> Option<basics::Address> {
         match &self.fields {
             TxFields::Payment(fields) => Some(fields.receiver),
             TxFields::AssetTransfer(fields) => Some(fields.asset_receiver),
@@ -586,7 +587,7 @@ trait TxContext {
     fn genesis_hash(&self) -> CryptoHash;
 }
 
-/// An instantiation of the TxContext trait with explicit fields for everything.
+/// An instantiation of the `TxContext` trait with explicit fields for everything.
 struct ExplicitTxContext {
     explicit_round: basics::Round,
     proto: config::ConsensusParams,

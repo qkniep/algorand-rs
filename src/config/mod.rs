@@ -460,7 +460,7 @@ pub struct Local {
 /// Name of the config.json file where we store per-algod-instance settings.
 const CONFIG_FILENAME: &str = "config.json";
 
-/// PhonebookFilename is the name of the phonebook configuration files (no longer used).
+/// Name of the phonebook configuration files (no longer used).
 const PHONEBOOK_FILENAME: &str = "phonebook.json"; // no longer used in product - still in tests
 
 /// Prefix of the name of the ledger database files.
@@ -527,7 +527,7 @@ impl Local {
     }
 
     /// Returns an array of one or more DNS Bootstrap identifiers.
-    fn dns_bootsrap_array(&self, network: protocol::NetworkID) -> Vec<String> {
+    fn dns_bootsrap_array(&self, network: &str) -> Vec<String> {
         let dns_str = self.dns_bootstrap(network);
         let array = dns_str.split(';');
         // omit zero length entries from the result set.
@@ -538,19 +538,19 @@ impl Local {
             .collect()
     }
 
-    /// Returns the network-specific DNSBootstrap identifier.
-    fn dns_bootstrap(&self, network: protocol::NetworkID) -> String {
+    /// Returns the network-specific DNS Bootstrap identifier.
+    fn dns_bootstrap(&self, network: &str) -> String {
         // if user hasn't modified the default dns_bootstrap_id in the configuration
         // file and we're targeting a devnet (via genesis file),
         // we the explicitly set devnet network bootstrap.
         if self.dns_bootstrap_id == Local::default().dns_bootstrap_id {
-            match network.as_ref() {
+            match network {
                 DEVNET => return "devnet.algodev.network".to_owned(),
                 BETANET => return "betanet.algodev.network".to_owned(),
                 _ => {}
             }
         }
-        self.dns_bootstrap_id.replace("<network>", &network)
+        self.dns_bootstrap_id.replace("<network>", network)
     }
 
     /// Writes the Local settings into a root/ConfigFilename file.
@@ -606,7 +606,7 @@ impl Local {
         self.catchup_block_validate_mode & CATCHUP_VALIDATION_MODE_VERIFY_TX_SIGNATURES != 0
     }
 
-    /// Returns true iff verifying the ApplyData of the payset needed.
+    /// Returns true iff verifying the `ApplyData` of the payset needed.
     pub fn catchup_verify_apply_data(&self) -> bool {
         self.catchup_block_validate_mode & CATCHUP_VALIDATION_MODE_VERIFY_APPLY_DATA != 0
     }
@@ -675,7 +675,7 @@ pub fn get_config_file_path(file: &str) -> Result<PathBuf> {
     Ok(get_global_config_file_root()?.join(file))
 }
 
-/// GetGlobalConfigFileRoot returns the current root folder for global configuration files.
+/// Returns the current root folder for global configuration files.
 /// This will likely only change for tests.
 pub fn get_global_config_file_root() -> io::Result<PathBuf> {
     let mut gcfr = GLOBAL_CONFIG_FILE_ROOT.write().unwrap();

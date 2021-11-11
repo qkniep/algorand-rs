@@ -17,7 +17,7 @@ impl Default for Local {
             base_logger_debug_level: 4,
             block_service_custom_fallback_endpoints: "".to_owned(),
             broadcast_connections_limit: -1,
-            cadaver_size_target: 1073741824,
+            cadaver_size_target: 1_073_741_824,
             catchpoint_file_history_length: 365,
             catchpoint_interval: 10000,
             catchpoint_tracking: 0,

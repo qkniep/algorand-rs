@@ -17,6 +17,16 @@ else
 fi
 echo ""
 
+echo -e "${BLU}Checking if code compiles...${RST}"
+if cargo build --all-targets; then
+    echo -e "${GRN}Your code successfully compiled.${RST}"
+else
+    echo -e "${RED}The project did not compile successfully!${RST}"
+    echo -e "${RED}Please fix your code before committing.${RST}"
+    exit 1
+fi
+echo ""
+
 echo -e "${BLU}Checking if code is formatted with rustfmt...${RST}"
 if rustfmt --check ./src/**/*.rs; then
     echo -e "${GRN}All code is formatted correctly.${RST}"
