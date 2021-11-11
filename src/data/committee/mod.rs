@@ -8,10 +8,7 @@ mod tests;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config;
-use crate::crypto::hashable::*;
-use crate::data::basics;
-use crate::protocol;
+use crate::{config, crypto::hashable::Hashable, data::basics, protocol};
 
 /// A Selector deterministically defines a cryptographic sortition committee.
 /// It contains both the input to the sortition VRF and the size of the sortition committee.

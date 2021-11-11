@@ -6,9 +6,9 @@ mod consensus;
 mod default;
 mod keyfile;
 //mod migrate;
-//mod version;
 #[cfg(test)]
 mod tests;
+//mod version;
 
 use std::collections::HashMap;
 use std::ffi::OsStr;

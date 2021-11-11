@@ -17,16 +17,6 @@ else
 fi
 echo ""
 
-echo -e "${BLU}Checking if all test cases pass...${RST}"
-if cargo test; then
-    echo -e "${GRN}All test cases passed.${RST}"
-else
-    echo -e "${RED}Test case(s) failed!${RST}"
-    echo -e "${RED}Please fix your tests and/or code before committing.${RST}"
-    exit 1
-fi
-echo ""
-
 echo -e "${BLU}Checking if code is formatted with rustfmt...${RST}"
 if rustfmt --check ./src/**/*.rs; then
     echo -e "${GRN}All code is formatted correctly.${RST}"
@@ -43,6 +33,16 @@ if cargo clippy -- -F clippy::suspicious -F clippy::complexity -F clippy::perf -
 else
     echo -e "${RED}Clippy doesn't like a few things about your code!${RST}"
     echo -e "${RED}Please fix them before committing.${RST}"
+    exit 1
+fi
+echo ""
+
+echo -e "${BLU}Checking if all test cases pass...${RST}"
+if cargo test; then
+    echo -e "${GRN}All test cases passed.${RST}"
+else
+    echo -e "${RED}Test case(s) failed!${RST}"
+    echo -e "${RED}Please fix your tests and/or code before committing.${RST}"
     exit 1
 fi
 echo ""

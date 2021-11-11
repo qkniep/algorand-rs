@@ -58,9 +58,10 @@ struct HashableCredential {
 impl UnauthenticatedCredential {
     /// Creates a new unauthenticated Credential given some selector.
     fn new(secrets: &crypto::VrfKeypair, sel: &impl Selector) -> Self {
-        match secrets.prove(sel) {
-            Ok(pf) => Self { proof: pf },
-            Err(_) => panic!("Failed to construct a VRF proof: participation key may be corrupt"),
+        Self {
+            proof: secrets
+                .prove(sel)
+                .expect("Failed to construct a VRF proof: participation key may be corrupt"),
         }
     }
 
@@ -73,8 +74,8 @@ impl UnauthenticatedCredential {
     /// Otherwise, an error is returned.
     fn verify<S: Selector>(
         self,
-        proto: config::ConsensusParams,
-        mem: Membership<S>,
+        proto: &config::ConsensusParams,
+        mem: &Membership<S>,
     ) -> Result<Credential, Error> {
         let selection_key = mem.record.data.selection_id.clone();
         let vrf_out = selection_key.verify(&self.proof, &mem.selector)?;

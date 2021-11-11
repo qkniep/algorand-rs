@@ -1,8 +1,10 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
-use super::transactions;
-use crate::crypto;
+use serde::{Deserialize, Serialize};
+
+use super::transactions::{SignedTx, TxID};
+use crate::{crypto, protocol};
 
 /// Used as the in-memory representation of a signed transaction group.
 /// Unlike the plain array of signed transactions, this includes transaction origination and counter
@@ -18,20 +20,25 @@ struct SignedTxGroup {
     /// This is local, assigned when the group is first seen by the local transaction pool.
     group_counter: u64,
     /// Hash of the entire transaction group.
-    group_tx_id: transactions::TxID,
+    group_tx_id: TxID,
     /// Length, in bytes, of the msgpack encoding of all the TXs in this transaction group.
     encoded_length: u32,
 }
 
 /// Vec of `SignedTx`s, allowing us to easily define the id() function.
-struct SignedTxVec(Vec<transactions::SignedTx>);
+#[derive(Serialize, Deserialize)]
+struct SignedTxVec(Vec<SignedTx>);
+
+impl crypto::hashable::Hashable for SignedTxVec {
+    fn to_be_hashed(&self) -> (protocol::HashID, Vec<u8>) {
+        (protocol::TX_GROUP, protocol::encode(self))
+    }
+}
 
 impl SignedTxVec {
     /// ID calculate the hash of the signed transaction group.
-    fn id(&self) -> transactions::TxID {
-        // TODO let enc = [protocol::TX_GROUP, self.encode()].concat();
-        let enc = [0; 16];
-        return transactions::TxID(crypto::hash(&enc));
+    fn id(&self) -> TxID {
+        TxID(crypto::hashable::hash_obj(self))
     }
 }
 

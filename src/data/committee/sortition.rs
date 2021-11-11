@@ -10,7 +10,13 @@ use statrs::distribution::{Binomial, DiscreteCDF};
 
 use crate::crypto;
 
-/// Runs the sortition function and returns the number of time the key was selected.
+/// Runs the sortition function and returns the number of times the key was selected.
+///
+/// # Panics
+///
+/// Should not panic for any provided inputs,
+/// as both `unwrap()`s can only panic if `max` is malformed.
+#[must_use]
 pub fn select(
     money: u64,
     total_money: u64,

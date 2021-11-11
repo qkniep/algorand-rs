@@ -7,14 +7,14 @@ use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
 
-use super::TxMerkleArray;
+use super::*;
 use crate::config;
 use crate::crypto::{self, hashable::*};
 use crate::data::{basics, committee, transactions};
 use crate::protocol;
 
-// TODO Error type
 // TODO ConsensusVersion and String...
+// TODO impl Borrow<Header> for Block?
 
 /// A Block contains the Payset and metadata corresponding to a given Round.
 #[derive(Clone, Default)]
@@ -96,6 +96,7 @@ pub struct BlockHeader {
     /// Once a block proposer determines its UpgradeVote, then UpdateState
     /// is updated deterministically based on the previous UpdateState and
     /// the new block's UpgradeVote.
+    #[serde(skip)]
     pub upgrade_state: UpgradeState,
     pub upgrade_vote: UpgradeVote,
 
@@ -154,8 +155,7 @@ pub struct UpgradeVote {
 /// strictly speaking, computable from the history of all UpgradeVotes
 /// but we keep it in the block for explicitness and convenience
 /// (instead of materializing it separately, like balances).
-//msgp:ignore UpgradeState
-#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct UpgradeState {
     pub current_protocol: protocol::ConsensusVersion,
     pub next_protocol: Option<protocol::ConsensusVersion>,
@@ -168,63 +168,70 @@ pub struct UpgradeState {
     pub next_protocol_switch_on: basics::Round,
 }
 
-/// CompactCertState tracks the state of compact certificates.
+/// Tracks the state of compact certificates.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CompactCertState {
-    /// CompactCertVoters is the root of a Merkle tree containing
-    /// the online accounts that will help sign a compact certificate.
+    /// Root of a Merkle tree containing the online accounts that will help sign a compact certificate.
     /// The Merkle root, and the compact certificate,
-    /// happen on blocks that are a multiple of ConsensusParams.CompactCertRounds.
-    /// For blocks that are not a multiple of ConsensusParams.CompactCertRounds, this value is zero.
+    /// happen on blocks that are a multiple of `ConsensusParams.compact_cert_rounds`.
+    /// For blocks that are not a multiple of `ConsensusParams.compact_cert_rounds`, this value is zero.
     pub compactcert_voters: CryptoHash,
 
-    /// Total number of MicroAlgos held by the accounts in CompactCertVoters (or zero, if the merkle root is zero).
+    /// Total number of MicroAlgos held by the accounts in `compactcert_voters` (or zero, if the merkle root is zero).
     /// This is intended for computing the threshold of votes to expect from CompactCertVoters.
     pub compactcert_voters_total: basics::MicroAlgos,
 
-    /// CompactCertNextRound is the next round for which we will accept a CompactCert transaction.
+    /// Next round for which we will accept a CompactCert transaction.
     pub compactcert_next_round: basics::Round,
 }
 
 impl Block {
     /// Returns a cryptographic digest summarizing the Block.
+    #[must_use]
     pub fn digest(&self) -> CryptoHash {
         hash_obj(&self.header)
     }
 
     /// Returns the Round for which the Block is relevant.
+    #[must_use]
     pub fn round(&self) -> basics::Round {
         self.header.round
     }
 
     /// Returns the consensus protocol params for a block.
+    #[must_use]
     pub fn consensus_protocol(&self) -> &config::ConsensusParams {
         &config::CONSENSUS.0[&self.header.upgrade_state.current_protocol]
     }
 
     /// Returns the genesis ID from the block header.
+    #[must_use]
     pub fn genesis_id(&self) -> String {
         self.header.genesis_id.clone()
     }
 
     /// Returns the genesis hash from the block header.
+    #[must_use]
     pub fn genesis_hash(&self) -> CryptoHash {
         self.header.genesis_hash.clone()
     }
 
-    /// WithSeed returns a copy of the Block with the seed set to s.
+    /// Returns a copy of this Block with the seed set to `s`.
+    #[must_use]
     pub fn with_seed(&self, s: committee::Seed) -> Block {
-        let mut c = self.clone();
-        c.header.seed = s;
-        return c;
+        let mut new_block = self.clone();
+        new_block.header.seed = s;
+        new_block
     }
 
     /// Seed returns the Block's random seed.
+    #[must_use]
     pub fn seed(&self) -> committee::Seed {
         self.header.seed.clone()
     }
 
     /// Constructs a new valid block with an empty payset and an unset seed.
+    // TODO document panics or work around unwraps
     pub fn new(prev: &mut BlockHeader) -> Block {
         let (upgrade_vote, upgrade_state) = process_upgrade_params(prev).unwrap();
 
@@ -252,18 +259,18 @@ impl Block {
                 timestamp,
                 genesis_id: prev.genesis_id.clone(),
                 genesis_hash: prev.genesis_hash.clone(),
-                ..Default::default()
+                ..BlockHeader::default()
             },
-            payset: Default::default(),
+            payset: transactions::Payset::default(),
         };
         blk.header.tx_root = blk.payset_commit().unwrap_or_else(|err| {
             warn!("Block::new(): computing empty tx_root: {:?}", err);
-            Default::default()
+            CryptoHash::default()
         });
         // We can't know the entire RewardsState yet, but we can carry over the special addresses.
         blk.header.rewards_state.fee_sink = prev.rewards_state.fee_sink;
         blk.header.rewards_state.rewards_pool = prev.rewards_state.rewards_pool;
-        return blk;
+        blk
     }
 
     /// Computes the commitment to the payset,
@@ -297,7 +304,9 @@ impl Block {
     }
 
     /// Decodes `block.payset` using `decode_signed_tx`, and returns the transactions in groups.
-    pub fn DecodePaysetGroups(&self) -> Result<Vec<Vec<transactions::SignedTxWithAD>>, ()> {
+    pub fn decode_payset_groups(
+        &self,
+    ) -> Result<Vec<Vec<transactions::SignedTxWithAD>>, InvalidBlock> {
         let mut res = Vec::new();
         let mut last_group = Vec::<transactions::SignedTxWithAD>::new();
 
@@ -321,7 +330,7 @@ impl Block {
     }
 
     /// Decodes `block.payset` using `decode_signed_tx`, and flattens groups.
-    pub fn DecodePaysetFlat(&self) -> Result<Vec<transactions::SignedTxWithAD>, ()> {
+    pub fn decode_payset_flat(&self) -> Result<Vec<transactions::SignedTxWithAD>, InvalidBlock> {
         let mut res = Vec::new();
         for txib in &self.payset.0 {
             res.push(self.header.decode_signed_tx(txib)?);
@@ -329,6 +338,11 @@ impl Block {
         return Ok(res);
     }
 
+    /// Constructs a Merkle tree over this blocks `Payset`.
+    /// It can then be used to retrieve the root hash or calculate proofs for transactions.
+    ///
+    /// # Errors
+    // TODO document possible errors
     pub fn tx_merkle_tree(&self) -> Result<crypto::merklearray::Tree, ()> {
         crypto::merklearray::Tree::from_block(self)
     }
@@ -336,21 +350,25 @@ impl Block {
 
 impl BlockHeader {
     /// Checks if this block header is a valid successor to the previous block's header, prev.
-    pub fn pre_check(&self, prev: &mut BlockHeader) -> Result<(), ()> {
+    ///
+    /// # Errors
+    // TODO document possible errors
+    pub fn pre_check(&self, prev: &mut BlockHeader) -> Result<(), InvalidBlock> {
         // check protocol
         let params = &config::CONSENSUS.0[&self.upgrade_state.current_protocol];
 
         // check round
         let round = basics::Round(prev.round.0 + 1);
         if round != self.round {
-            //return fmt.Errorf("block round incorrect %v != %v", self.round, round)
-            return Err(());
+            return Err(InvalidBlock::WrongRound(round, self.round));
         }
 
         // check the pointer to the previous block
         if self.branch != hash_obj(prev) {
-            //return fmt.Errorf("block branch incorrect %v != %v", self.branch, prev.Hash())
-            return Err(());
+            return Err(InvalidBlock::WrongBranch(
+                self.branch.clone(),
+                hash_obj(prev),
+            ));
         }
 
         // check upgrade state
@@ -358,8 +376,7 @@ impl BlockHeader {
             .upgrade_state
             .apply_upgrade_vote(round, &self.upgrade_vote)?;
         if next_upgrade_state != self.upgrade_state {
-            //return fmt.Errorf("UpgradeState mismatch: %v != %v", next_upgrade_state, self.upgrade_state)
-            return Err(());
+            return Err(InvalidBlock::WrongUpgradeState);
         }
 
         // Check timestamp
@@ -368,42 +385,45 @@ impl BlockHeader {
         if prev.timestamp > 0 {
             // special case when the previous timestamp is zero -- allow a larger window
             if self.timestamp < prev.timestamp {
-                //return fmt.Errorf("bad timestamp: current %v < previous %v", self.timestamp, prev.timestamp)
-                return Err(());
+                return Err(InvalidBlock::BadEarlyTimestamp(
+                    self.timestamp,
+                    prev.timestamp,
+                ));
             } else if self.timestamp > prev.timestamp + params.max_timestamp_increment {
-                //return fmt.Errorf("bad timestamp: current %v > previous %v, max increment = %v ", self.timestamp, prev.timestamp, params.max_timestamp_increment)
-                return Err(());
+                return Err(InvalidBlock::BadLateTimestamp(
+                    self.timestamp,
+                    prev.timestamp,
+                    params.max_timestamp_increment,
+                ));
             }
         }
 
         // Check genesis ID value against previous block, if set
         if self.genesis_id == "" {
-            //return fmt.Errorf("genesis ID missing")
-            return Err(());
-        }
-        if prev.genesis_id != "" && prev.genesis_id != self.genesis_id {
-            //return fmt.Errorf("genesis ID mismatch: %s != %s", self.genesis_id, prev.genesis_id)
-            return Err(());
+            return Err(InvalidBlock::MissingGenesisID);
+        } else if prev.genesis_id != "" && self.genesis_id != prev.genesis_id {
+            return Err(InvalidBlock::GenesisIDMismatch(
+                self.genesis_id.clone(),
+                prev.genesis_id.clone(),
+            ));
         }
 
         // Check genesis hash value against previous block, if set
         if params.support_genesis_hash {
             if self.genesis_hash == Default::default() {
-                //return fmt.Errorf("genesis hash missing")
-                return Err(());
+                return Err(InvalidBlock::MissingGenesisHash);
             }
             if prev.genesis_hash != Default::default() && prev.genesis_hash != self.genesis_hash {
-                //return fmt.Errorf("genesis hash mismatch: %s != %s", self.genesis_hash, prev.genesis_hash)
-                return Err(());
+                return Err(InvalidBlock::GenesisHashMismatch(
+                    self.genesis_hash.clone(),
+                    prev.genesis_hash.clone(),
+                ));
             }
-        } else {
-            if self.genesis_hash != Default::default() {
-                //return fmt.Errorf("genesis hash not allowed: %s", self.genesis_hash)
-                return Err(());
-            }
+        } else if self.genesis_hash != Default::default() {
+            return Err(InvalidBlock::GenesisHashNotSupported);
         }
 
-        return Ok(());
+        Ok(())
     }
 
     /// Returns information about the next expected protocol version
@@ -433,7 +453,7 @@ impl BlockHeader {
     pub fn decode_signed_tx(
         &self,
         stb: &transactions::SignedTxInBlock,
-    ) -> Result<transactions::SignedTxWithAD, ()> {
+    ) -> Result<transactions::SignedTxWithAD, InvalidBlock> {
         let mut stad = stb.tx.clone();
 
         let proto = &config::CONSENSUS.0[&self.upgrade_state.current_protocol];
@@ -442,8 +462,7 @@ impl BlockHeader {
         }
 
         if stb.tx.tx.tx.header.genesis_id != "" {
-            //return Err(fmt.Errorf("GenesisID <%s> not empty", st.Txn.GenesisID));
-            return Err(());
+            return Err(InvalidBlock::NonEmptyGenesisID);
         }
 
         if stb.has_genesis_id {
@@ -451,23 +470,19 @@ impl BlockHeader {
         }
 
         if stb.tx.tx.tx.header.genesis_hash != Default::default() {
-            //return fmt.Errorf("GenesisHash <%v> not empty", st.Txn.GenesisHash)
-            return Err(());
+            return Err(InvalidBlock::NonEmptyGenesisHash);
         }
 
         if proto.require_genesis_hash {
             if stb.has_genesis_hash {
-                //return fmt.Errorf("HasGenesisHash set to true but RequireGenesisHash obviates the flag")
-                return Err(());
+                return Err(InvalidBlock::RedundantHasGenesisHash);
             }
             stad.tx.tx.header.genesis_hash = self.genesis_hash.clone();
-        } else {
-            if stb.has_genesis_hash {
-                stad.tx.tx.header.genesis_hash = self.genesis_hash.clone();
-            }
+        } else if stb.has_genesis_hash {
+            stad.tx.tx.header.genesis_hash = self.genesis_hash.clone();
         }
 
-        return Ok(stad);
+        Ok(stad)
     }
 
     /// Converts a `SignedTxWithAD` into a `SignedTxInBlock` for this block.
@@ -475,7 +490,7 @@ impl BlockHeader {
         &self,
         mut st: transactions::SignedTx,
         ad: transactions::ApplyData,
-    ) -> Result<transactions::SignedTxInBlock, ()> {
+    ) -> Result<transactions::SignedTxInBlock, InvalidBlock> {
         let mut has_genesis_id = false;
         let mut has_genesis_hash = false;
 
@@ -494,8 +509,10 @@ impl BlockHeader {
                 st.tx.header.genesis_id = "".to_owned();
                 has_genesis_id = true;
             } else {
-                //return fmt.Errorf("GenesisID mismatch: %s != %s", st.Txn.GenesisID, bh.GenesisID)
-                return Err(());
+                return Err(InvalidBlock::GenesisIDMismatch(
+                    self.genesis_id.clone(),
+                    st.tx.header.genesis_id,
+                ));
             }
         }
 
@@ -506,13 +523,14 @@ impl BlockHeader {
                     has_genesis_hash = true;
                 }
             } else {
-                //return fmt.Errorf("GenesisHash mismatch: %v != %v", st.Txn.GenesisHash, bh.GenesisHash)
-                return Err(());
+                return Err(InvalidBlock::GenesisHashMismatch(
+                    self.genesis_hash.clone(),
+                    st.tx.header.genesis_hash,
+                ));
             }
         } else {
             if proto.require_genesis_hash {
-                //return fmt.Errorf("GenesisHash required but missing")
-                return Err(());
+                return Err(InvalidBlock::MissingGenesisHash);
             }
         }
 
@@ -541,13 +559,12 @@ impl RewardsState {
             let mut max_spent_over = next_proto.min_balance;
 
             if next_proto.pending_residue_rewards {
-                match max_spent_over.checked_add(self.rewards_residue) {
-                    Some(n) => max_spent_over = n,
-                    None => {
-                        error!("overflowed when trying to accumulate min_balance({}) and rewards_residue({}) for round {} (state {:?})", next_proto.min_balance, self.rewards_residue, next_round, self);
-                        // this should never happen, but if it does, adjust the maxSpentOver so that we will have no rewards.
-                        max_spent_over = incentive_pool_balance.0;
-                    }
+                if let Some(n) = max_spent_over.checked_add(self.rewards_residue) {
+                    max_spent_over = n;
+                } else {
+                    error!("overflowed when trying to accumulate min_balance({}) and rewards_residue({}) for round {} (state {:?})", next_proto.min_balance, self.rewards_residue, next_round, self);
+                    // this should never happen, but if it does, adjust the maxSpentOver so that we will have no rewards.
+                    max_spent_over = incentive_pool_balance.0;
                 }
             }
 
@@ -609,21 +626,19 @@ impl UpgradeState {
         &mut self,
         round: basics::Round,
         vote: &UpgradeVote,
-    ) -> Result<UpgradeState, ()> {
+    ) -> Result<UpgradeState, InvalidBlock> {
         // Locate the config parameters for current protocol
         let params = &config::CONSENSUS.0[&self.current_protocol];
 
         // Apply proposal of upgrade to new protocol
         if vote.upgrade_propose != self.current_protocol {
             if self.next_protocol != Some(self.current_protocol) {
-                //err = fmt.Errorf("applyUpgradeVote: new proposal during existing proposal")
-                return Err(());
+                return Err(InvalidBlock::CompetingProposal);
             }
 
             /*
             if vote.upgrade_propose.len() > params.max_version_string_len {
-                //err = fmt.Errorf("applyUpgradeVote: proposed protocol version %s too long", vote.UpgradePropose)
-                return Err(());
+                return Err(InvalidBlock::VersionStringTooLong(vote.upgrade_propose.len(), params.max_version_string_len));
             }
             */
 
@@ -631,11 +646,12 @@ impl UpgradeState {
             if upgrade_delay > params.max_upgrade_wait_rounds
                 || upgrade_delay < params.min_upgrade_wait_rounds
             {
-                //err = fmt.Errorf("applyUpgradeVote: proposed upgrade wait rounds %d out of permissible range [%d, %d]", upgradeDelay, params.MinUpgradeWaitRounds, params.MaxUpgradeWaitRounds)
-                return Err(());
-            }
-
-            if upgrade_delay == 0 {
+                return Err(InvalidBlock::DelayOutOfRange(
+                    upgrade_delay,
+                    params.min_upgrade_wait_rounds,
+                    params.max_upgrade_wait_rounds,
+                ));
+            } else if upgrade_delay == 0 {
                 upgrade_delay = params.default_upgrade_wait_rounds;
             }
 
@@ -644,23 +660,21 @@ impl UpgradeState {
             self.next_protocol_vote_before = basics::Round(round.0 + params.upgrade_vote_rounds);
             self.next_protocol_switch_on =
                 basics::Round(round.0 + params.upgrade_vote_rounds + upgrade_delay);
-        } else {
-            if vote.upgrade_delay != basics::Round(0) {
-                //err = fmt.Errorf("applyUpgradeVote: upgrade delay %d nonzero when not proposing", vote.UpgradeDelay)
-                return Err(());
-            }
+        } else if vote.upgrade_delay != basics::Round(0) {
+            return Err(InvalidBlock::NonZeroDelayWithoutProposal);
         }
 
         // Apply approval of existing protocol upgrade
         if vote.upgrade_approve {
             if self.next_protocol == Some(self.current_protocol) {
-                //err = fmt.Errorf("applyUpgradeVote: approval without an active proposal")
-                return Err(());
+                return Err(InvalidBlock::ApprovalNoneActive);
             }
 
             if round >= self.next_protocol_vote_before {
-                //err = fmt.Errorf("applyUpgradeVote: approval after vote deadline")
-                return Err(());
+                return Err(InvalidBlock::ApprovalAfterDeadline(
+                    round,
+                    self.next_protocol_vote_before,
+                ));
             }
 
             self.next_protocol_approvals += 1;
@@ -670,7 +684,7 @@ impl UpgradeState {
         if round == self.next_protocol_vote_before
             && self.next_protocol_approvals < params.upgrade_threshold
         {
-            self.next_protocol = self.next_protocol;
+            self.next_protocol = None;
             self.next_protocol_approvals = 0;
             self.next_protocol_vote_before = basics::Round(0);
             self.next_protocol_switch_on = basics::Round(0);
@@ -679,7 +693,7 @@ impl UpgradeState {
         // Switch over to new approved protocol
         if round == self.next_protocol_switch_on {
             self.current_protocol = self.next_protocol.unwrap();
-            self.next_protocol = self.next_protocol;
+            self.next_protocol = None;
             self.next_protocol_approvals = 0;
             self.next_protocol_vote_before = basics::Round(0);
             self.next_protocol_switch_on = basics::Round(0);
@@ -691,7 +705,9 @@ impl UpgradeState {
 
 /// Determines our upgrade vote, applies it, and returns the generated `UpgradeVote` and the new `UpgradeState`.
 // TODO should `prev` be mut, ref, or mut ref
-pub fn process_upgrade_params(prev: &mut BlockHeader) -> Result<(UpgradeVote, UpgradeState), ()> {
+pub fn process_upgrade_params(
+    prev: &mut BlockHeader,
+) -> Result<(UpgradeVote, UpgradeState), InvalidBlock> {
     // Find parameters for current protocol; panic if not supported
     let prev_params = &config::CONSENSUS.0[&prev.upgrade_state.current_protocol];
 

@@ -52,18 +52,17 @@ impl MerkleTrieCache {
     /// Retrieves the given node by its identifier, loading it from storage if it cannot be found in cache,
     /// and returning an error if it's neither in cache nor in storage.
     pub fn get_node(&mut self, id: NodeID) -> Result<Node, CacheError> {
-        if !self.cache.contains_key(&id) {
-            match self.storage.load_node(id)? {
+        Ok(self
+            .cache
+            .entry(id)
+            .or_insert(match self.storage.load_node(id)? {
                 None => return Err(CacheError::MissingNode),
-                Some(node_data) => {
-                    match Node::deserialize(&node_data) {
-                        None => return Err(CacheError::NodeDecodingFailure),
-                        Some(node) => self.cache.insert(id, node),
-                    };
-                }
-            }
-        }
-        Ok(self.cache.get(&id).unwrap().clone())
+                Some(node_data) => match Node::deserialize(&node_data) {
+                    None => return Err(CacheError::NodeDecodingFailure),
+                    Some(node) => node,
+                },
+            })
+            .clone())
     }
 
     pub fn set_node(&mut self, id: NodeID, node: Node) -> Result<(), CacheError> {
@@ -76,16 +75,9 @@ impl MerkleTrieCache {
 
     /// Marks the given node to be deleted, or (if it was never flushed) deletes it right away.
     // TODO adapt once we support transactions again
-    pub fn delete_node(&mut self, id: NodeID) {
+    pub fn delete_node(&mut self, id: NodeID) -> Result<(), CacheError> {
         self.cache.remove(&id);
-        self.storage.store_node(id, &[]);
+        self.storage.store_node(id, &[])?;
+        Ok(())
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {}
 }

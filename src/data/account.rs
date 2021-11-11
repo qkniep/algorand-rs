@@ -19,7 +19,7 @@ lazy_static! {
 
 /// Encapsulates a set of secrets which controls some store of money.
 ///
-/// A Root is authorized to spend money and create Participations
+/// A `Root` is authorized to spend money and create `Participation`s
 /// for which this account is the parent.
 ///
 /// It handles persistence and secure deletion of secrets.
@@ -31,7 +31,7 @@ pub struct Root {
 /// All such accounts are associated with a `parent` root account
 /// (although this parent account may not be resident on this machine).
 ///
-/// Participations are allowed to vote on a user's behalf for some range of rounds.
+/// `Participation`s are allowed to vote on a user's behalf for some range of rounds.
 /// After this range, all remaining secrets are destroyed.
 ///
 /// For correctness, all `Root`s should have no more than one `Participation` globally active at any time.
@@ -121,7 +121,7 @@ impl Participation {
     pub fn overlaps_interval(&self, first: basics::Round, last: basics::Round) -> bool {
         if last < first {
             // TODO log panic?
-            panic!("round interval should be ordered (was {}-{})", first, last)
+            panic!("round interval should be ordered (was {}-{})", first, last);
         }
         last >= self.first_valid && first <= self.last_valid
     }
@@ -147,7 +147,7 @@ impl Participation {
     }
     */
 
-    /// GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
+    /// Returns a transaction object for registering a `Participation` with its parent.
     pub fn generate_registration_transaction(
         &self,
         fee: basics::MicroAlgos,
@@ -162,7 +162,7 @@ impl Participation {
                 first_valid,
                 last_valid,
                 lease,
-                ..Default::default()
+                ..transactions::Header::default()
             },
             fields: transactions::TxFields::Keyreg(transactions::KeyregFields {
                 vote_pk: self.voting.verifier,

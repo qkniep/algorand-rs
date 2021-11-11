@@ -2,9 +2,11 @@
 // Distributed under terms of the MIT license.
 
 pub mod block;
+pub mod errors;
 pub mod genesis;
 pub mod tx_merkle;
 
 pub use block::*;
+pub use errors::*;
 pub use genesis::*;
 pub use tx_merkle::*;

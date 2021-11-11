@@ -1,7 +1,7 @@
 // Copyright (C) 2021 Quentin M. Kniep <hello@quentinkniep.com>
 // Distributed under terms of the MIT license.
 
-use super::Block;
+use super::{Block, InvalidBlock};
 use crate::{
     crypto::{self, hashable::Hashable},
     data::transactions,
@@ -20,7 +20,7 @@ pub struct TxMerkleElem {
 
 impl TxMerkleArray {
     /// Get implements the merklearray.Array interface.
-    pub fn from_block(block: &Block) -> Result<Self, ()> {
+    pub fn from_block(block: &Block) -> Result<Self, InvalidBlock> {
         let mut res = Vec::with_capacity(block.payset.0.len());
 
         for stib in &block.payset.0 {
@@ -49,12 +49,4 @@ impl Hashable for TxMerkleElem {
 
         (protocol::TX_MERKLE_LEAF, buf.to_vec())
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {}
 }

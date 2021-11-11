@@ -36,6 +36,7 @@ impl Tree {
 
     /// Constructs a Merkle tree given an array.
     pub fn from_block(block: &Block) -> Result<Self, ()> {
+        // Calculate leaf nodes as hashes of block's payset entries
         let leaves = block
             .payset
             .0
@@ -57,6 +58,7 @@ impl Tree {
             levels: vec![Layer(leaves)],
         };
 
+        // Calculate all layers up to root
         while tree.top_layer().0.len() > 1 {
             tree.levels.push(tree.top_layer().up());
         }

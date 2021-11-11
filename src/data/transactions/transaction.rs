@@ -273,8 +273,7 @@ impl Transaction {
                     && (!fields.approval_program.is_empty()
                         || !fields.clear_state_program.is_empty())
                 {
-                    //return fmt.Errorf( "programs may only be specified during application creation or update",);
-                    return Err(InvalidTx::Unknown);
+                    return Err(InvalidTx::ChangeProgramWithoutUpdate);
                 }
 
                 let mut effective_epp = fields.extra_program_pages;
@@ -283,12 +282,9 @@ impl Transaction {
                     if fields.local_state_schema != Default::default()
                         || fields.global_state_schema != Default::default()
                     {
-                        //return fmt.Errorf("local and global state schemas are immutable");
-                        return Err(InvalidTx::Unknown);
-                    }
-                    if fields.extra_program_pages != 0 {
-                        //return fmt.Errorf("tx.ExtraProgramPages is immutable");
-                        return Err(InvalidTx::Unknown);
+                        return Err(InvalidTx::ChangeAppStateSchema);
+                    } else if fields.extra_program_pages != 0 {
+                        return Err(InvalidTx::ChangeExtraProgramPages);
                     }
 
                     if proto.enable_extra_pages_on_app_update {
@@ -298,75 +294,96 @@ impl Transaction {
 
                 // Limit total number of arguments
                 if fields.application_args.len() as u64 > proto.max_app_args as u64 {
-                    //return fmt.Errorf("too many application args, max %d", proto.MaxAppArgs);
-                    return Err(InvalidTx::Unknown);
+                    return Err(InvalidTx::TooManyAppArgs(
+                        fields.application_args.len(),
+                        proto.max_app_args,
+                    ));
                 }
 
                 // Sum up argument lengths
-                let mut arg_sum = 0_u64;
+                let mut arg_sum = 0_usize;
                 for arg in &fields.application_args {
-                    arg_sum = arg_sum.saturating_add(arg.len() as u64);
+                    arg_sum = arg_sum.saturating_add(arg.len());
                 }
 
                 // Limit total length of all arguments
-                if arg_sum > proto.max_app_total_arg_len as u64 {
-                    //return fmt.Errorf( "application args total length too long, max len %d bytes", proto.MaxAppTotalArgLen,);
-                    return Err(InvalidTx::Unknown);
+                if arg_sum > proto.max_app_total_arg_len as usize {
+                    return Err(InvalidTx::AppArgsTotalTooLong(
+                        arg_sum,
+                        proto.max_app_total_arg_len,
+                    ));
                 }
 
                 // Limit number of accounts referred to in a single ApplicationCall
-                if fields.accounts.len() as u64 > proto.max_app_tx_accounts as u64 {
-                    //return fmt.Errorf( "tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts,);
-                    return Err(InvalidTx::Unknown);
+                if fields.accounts.len() > proto.max_app_tx_accounts as usize {
+                    return Err(InvalidTx::AccountsTooLong(
+                        fields.accounts.len(),
+                        proto.max_app_tx_accounts,
+                    ));
                 }
 
                 // Limit number of other app global states referred to
-                if fields.foreign_apps.len() as u64 > proto.max_app_tx_foreign_apps as u64 {
-                    //return fmt.Errorf( "tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps,);
-                    return Err(InvalidTx::Unknown);
+                if fields.foreign_apps.len() > proto.max_app_tx_foreign_apps as usize {
+                    return Err(InvalidTx::ForeignAppTooLong(
+                        fields.foreign_apps.len(),
+                        proto.max_app_tx_foreign_apps,
+                    ));
                 }
 
-                if fields.foreign_assets.len() as u64 > proto.max_app_tx_foreign_assets as u64 {
-                    //return fmt.Errorf( "tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets,);
-                    return Err(InvalidTx::Unknown);
+                if fields.foreign_assets.len() > proto.max_app_tx_foreign_assets as usize {
+                    return Err(InvalidTx::ForeignAssetsTooLong(
+                        fields.foreign_assets.len(),
+                        proto.max_app_tx_foreign_assets,
+                    ));
                 }
 
                 // Limit the sum of all types of references that bring in account records
-                if (fields.accounts.len() as u64
-                    + fields.foreign_apps.len() as u64
-                    + fields.foreign_assets.len() as u64)
-                    > proto.max_app_total_tx_references as u64
-                {
-                    //return fmt.Errorf( "tx has too many references, max is %d", proto.MaxAppTotalTxnReferences,);
-                    return Err(InvalidTx::Unknown);
+                let references =
+                    fields.accounts.len() + fields.foreign_apps.len() + fields.foreign_assets.len();
+                if references > proto.max_app_total_tx_references as usize {
+                    return Err(InvalidTx::TooManyReferences(
+                        references,
+                        proto.max_app_total_tx_references,
+                    ));
                 }
 
-                if fields.extra_program_pages > proto.max_extra_app_program_pages as u32 {
-                    //return fmt.Errorf( "tx.ExtraProgramPages too large, max number of extra pages is %d", proto.MaxExtraAppProgramPages,);
-                    return Err(InvalidTx::Unknown);
+                if fields.extra_program_pages > proto.max_extra_app_program_pages {
+                    return Err(InvalidTx::TooManyExtraProgramPages(
+                        fields.extra_program_pages,
+                        proto.max_extra_app_program_pages,
+                    ));
                 }
 
                 let ap_len = fields.approval_program.len();
                 let cs_len = fields.clear_state_program.len();
                 let pages = 1 + effective_epp;
-                if ap_len as u64 > pages as u64 * proto.max_app_program_len as u64 {
-                    //return fmt.Errorf( "approval program too long. max len %d bytes", pages * proto.MaxAppProgramLen,);
-                    return Err(InvalidTx::Unknown);
+                if ap_len > (pages * proto.max_app_program_len) as usize {
+                    return Err(InvalidTx::ApprovalProgramTooLong(
+                        ap_len,
+                        pages * proto.max_app_program_len,
+                    ));
                 } else if cs_len as u64 > pages as u64 * proto.max_app_program_len as u64 {
-                    //return fmt.Errorf( "clear state program too long. max len %d bytes", pages * proto.MaxAppProgramLen,);
-                    return Err(InvalidTx::Unknown);
-                } else if ap_len as u64 + cs_len as u64
-                    > pages as u64 * proto.max_app_total_program_len as u64
-                {
-                    //return fmt.Errorf( "app programs too long. max total len %d bytes", pages * proto.MaxAppTotalProgramLen,);
-                    return Err(InvalidTx::Unknown);
+                    return Err(InvalidTx::ClearStateProgramTooLong(
+                        cs_len,
+                        pages * proto.max_app_program_len,
+                    ));
+                } else if ap_len + cs_len > (pages * proto.max_app_total_program_len) as usize {
+                    return Err(InvalidTx::AppProgramsTooLong(
+                        ap_len + cs_len,
+                        pages * proto.max_app_program_len,
+                    ));
                 } else if fields.local_state_schema.num_entries() > proto.max_local_schema_entries {
-                    //return fmt.Errorf( "tx.LocalStateSchema too large, max number of keys is %d", proto.MaxLocalSchemaEntries,);
-                    return Err(InvalidTx::Unknown);
+                    return Err(InvalidTx::LocalStateSchemaTooLarge(
+                        fields.local_state_schema.num_entries(),
+                        proto.max_local_schema_entries,
+                    ));
                 } else if fields.global_state_schema.num_entries() > proto.max_global_schema_entries
                 {
                     //return fmt.Errorf( "tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries,);
-                    return Err(InvalidTx::Unknown);
+                    return Err(InvalidTx::GlobalStateSchemaTooLarge(
+                        fields.global_state_schema.num_entries(),
+                        proto.max_global_schema_entries,
+                    ));
                 }
             }
             TxFields::CompactCert(_) => {
@@ -376,26 +393,19 @@ impl Transaction {
 
                 // This is a placeholder transaction used to store compact certs on the ledger,
                 // and ensure they are broadly available.
-                // Most of the fields must be empty.
-                // It must be issued from a special sender address.
+                // It must be issued from a special sender address and most of the fields must be empty.
                 if self.header.sender != *COMPACT_CERT_SENDER {
-                    //return fmt.Errorf("sender must be the compact-cert sender");
-                    return Err(InvalidTx::Unknown);
+                    return Err(InvalidTx::CCInvalidSender);
                 } else if !self.header.fee.is_zero() {
-                    //return fmt.Errorf("fee must be zero");
-                    return Err(InvalidTx::Unknown);
+                    return Err(InvalidTx::CCNonZeroFee);
                 } else if !self.header.note.is_empty() {
-                    //return fmt.Errorf("note must be empty");
-                    return Err(InvalidTx::Unknown);
+                    return Err(InvalidTx::CCNonEmptyNote);
                 } else if !self.header.group.is_zero() {
-                    //return fmt.Errorf("group must be zero");
-                    return Err(InvalidTx::Unknown);
+                    return Err(InvalidTx::CCNonZeroGroup);
                 } else if !self.header.rekey_to.is_zero() {
-                    //return fmt.Errorf("rekey must be zero");
-                    return Err(InvalidTx::Unknown);
+                    return Err(InvalidTx::CCNonZeroRekey);
                 } else if self.header.lease != [0; 32] {
-                    //return fmt.Errorf("lease must be zero");
-                    return Err(InvalidTx::Unknown);
+                    return Err(InvalidTx::CCNonZeroLease);
                 }
             }
         }

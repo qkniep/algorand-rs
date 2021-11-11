@@ -61,7 +61,7 @@ fn write_sk(filename: &impl AsRef<Path>, data: &[u8]) -> io::Result<()> {
         .truncate(true)
         .mode(0o600)
         .open(filename)?;
-    f.write(data)?;
+    f.write_all(data)?;
     return Ok(());
 }
 
@@ -73,6 +73,6 @@ fn write_pk(filename: &impl AsRef<Path>, data: &[u8]) -> io::Result<()> {
         .truncate(true)
         .mode(0o666)
         .open(filename)?;
-    f.write(data)?;
+    f.write_all(data)?;
     return Ok(());
 }

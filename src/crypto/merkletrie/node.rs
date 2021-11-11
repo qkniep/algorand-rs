@@ -30,7 +30,7 @@ impl Node {
             return Ok(d == self.hash);
         }
         if let Some(child_id) = self.children.unwrap()[usize::from(d[0])] {
-            let child_node = cache.get_node(child_id)?.clone();
+            let child_node = cache.get_node(child_id)?;
             child_node.find(cache, &d[1..])
         } else {
             Ok(false)
@@ -94,17 +94,17 @@ impl Node {
 
             let (mut pnode, id) = cache.allocate_new_node();
             pnode.dirty = true;
-            pnode.children = self.children.clone();
+            pnode.children = self.children;
             pnode.children.as_mut().unwrap()[usize::from(d[0])] = Some(child_id);
             (pnode, id)
         } else {
             // there is already a child there.
             let cur_id = self.children.unwrap()[usize::from(d[0])].unwrap();
-            let mut child_node = cache.get_node(cur_id)?.clone();
+            let mut child_node = cache.get_node(cur_id)?;
             let updated_child = child_node.add(cache, &d[1..], &[path, &[d[0]]].concat())?;
 
             child_node.dirty = true;
-            child_node.children = self.children.clone();
+            child_node.children = self.children;
             child_node.children.as_mut().unwrap()[usize::from(d[0])] = Some(updated_child);
             (child_node, cur_id)
         };
@@ -124,15 +124,11 @@ impl Node {
         }
 
         // recursively calculate hashes (depth first)
-        if let Some(children) = self.children {
-            for child_id in &children {
-                if let Some(id) = child_id {
-                    let mut child_node = cache.get_node(*id)?;
-                    if !child_node.is_leaf() && child_node.dirty {
-                        child_node.calculate_hash(cache)?;
-                        cache.set_node(*id, child_node)?;
-                    }
-                }
+        for id in self.children.into_iter().flatten().flatten() {
+            let mut child_node = cache.get_node(id)?;
+            if !child_node.is_leaf() && child_node.dirty {
+                child_node.calculate_hash(cache)?;
+                cache.set_node(id, child_node)?;
             }
         }
 
@@ -173,14 +169,14 @@ impl Node {
     ) -> Result<NodeID, CacheError> {
         // allocate a new node to replace the current one.
         let nid = self.children.unwrap()[usize::from(key[0])].unwrap();
-        let mut node = cache.get_node(nid)?.clone();
+        let mut node = cache.get_node(nid)?;
         if node.is_leaf() {
-            node.children = self.children.clone();
+            node.children = self.children;
             node.children.as_mut().unwrap()[usize::from(key[0])] = None;
         } else {
             let updated_child_id = node.remove(cache, &key[1..], &[path, &[key[0]]].concat())?;
 
-            node.children = self.children.clone();
+            node.children = self.children;
             node.children.as_mut().unwrap()[usize::from(key[0])] = Some(updated_child_id);
         };
 
@@ -203,7 +199,7 @@ impl Node {
             if child_node.is_leaf() {
                 // convert current node into a leaf.
                 node.hash = [&[hash_idx as u8], child_node.hash.as_slice()].concat();
-                cache.delete_node(child_id);
+                cache.delete_node(child_id)?;
                 node.children = None;
                 node.dirty = false;
             }

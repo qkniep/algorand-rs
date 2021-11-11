@@ -13,7 +13,6 @@ use crate::data::{account, basics, bookkeeping};
 use crate::protocol;
 
 /// A ParticipationKeyIdentity defines the parameters that makes a pariticpation key unique.
-#[derive(PartialEq, Eq)]
 struct ParticipationKeyIdentity {
     pub address: basics::Address, // the address this participation key is used to vote for.
 
@@ -159,10 +158,14 @@ impl Hash for ParticipationKeyIdentity {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {}
+impl PartialEq for ParticipationKeyIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        self.address == other.address
+            && self.first_valid == other.first_valid
+            && self.last_valid == other.last_valid
+            && self.vote_id.as_bytes() == other.vote_id.as_bytes()
+            && self.selection_id == other.selection_id
+    }
 }
+
+impl Eq for ParticipationKeyIdentity {}

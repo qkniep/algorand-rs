@@ -86,7 +86,7 @@ impl Trie {
             return Ok(true);
         }
 
-        let pnode = self.cache.get_node(self.root.unwrap())?.clone();
+        let pnode = self.cache.get_node(self.root.unwrap())?;
         if pnode.find(&mut self.cache, d)? {
             return Ok(false);
         }
@@ -121,7 +121,7 @@ impl Trie {
         //mt.cache.beginTransaction()
         if pnode.is_leaf() {
             // remove the root.
-            self.cache.delete_node(self.root.unwrap());
+            self.cache.delete_node(self.root.unwrap())?;
             self.root = None;
             //self.cache.commitTransaction()
             self.element_length = 0;
@@ -133,7 +133,7 @@ impl Trie {
                 Err(TrieError::CacheAccessError(e))
             }
             Ok(updated_root) => {
-                self.cache.delete_node(self.root.unwrap());
+                self.cache.delete_node(self.root.unwrap())?;
                 //self.cache.commitTransaction()
                 self.root = Some(updated_root);
                 Ok(true)

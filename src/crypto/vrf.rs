@@ -84,7 +84,7 @@ impl VrfKeypair {
     pub fn prove_bytes(&self, bytes: &[u8]) -> Result<VrfProof, ()> {
         // Step 1: Derive public key. (not necessary, already available as self.public)
         // Step 2: H = ECVRF_hash_to_curve(Y, alpha_string)
-        let hash_point = hash_to_curve(&self.public, bytes).unwrap();
+        let hash_point = hash_to_curve(&self.public, bytes);
 
         // Step 3: h_string = point_to_string(H)
         let h_str = hash_point.compress().to_bytes();
@@ -99,7 +99,7 @@ impl VrfKeypair {
 
         // Step 6: c = ECVRF_hash_points(H, Gamma, k*B, k*H)
         let b = constants::ED25519_BASEPOINT_POINT;
-        let c = hash_points(vec![hash_point, gamma, k * b, k * hash_point]);
+        let c = hash_points(&[hash_point, gamma, k * b, k * hash_point]);
 
         // Step 7: s = (k + c*x) mod q
         let s = k + c * secret_scalar_x;
@@ -121,7 +121,7 @@ impl VrfKeypair {
 
 impl VrfPublicKey {
     /// Checks a VRF proof of a given Hashable.
-    /// If the proof is valid the pseudorandom VrfOutput will be returned.
+    /// If the proof is valid the pseudorandom `VrfOutput` will be returned.
     /// For a given public key and message, there are potentially multiple valid proofs.
     /// However, given a public key and message, all valid proofs will yield the same output.
     /// Moreover, the output is indistinguishable from random to anyone without the proof or the secret key.
@@ -142,11 +142,11 @@ impl VrfPublicKey {
         }
 
         let (gamma, c, s) = decoded.unwrap();
-        let hash_point = hash_to_curve(self, bytes)?;
+        let hash_point = hash_to_curve(self, bytes);
 
         let u = s * constants::ED25519_BASEPOINT_POINT - c * self.to_point();
         let v = s * hash_point - c * gamma;
-        let c_calculated = hash_points(vec![hash_point, gamma, u, v]);
+        let c_calculated = hash_points(&[hash_point, gamma, u, v]);
 
         if c_calculated == c {
             Ok(proof.to_output())
@@ -248,7 +248,7 @@ impl fmt::Display for VrfPublicKey {
 
 /// Cryptographically hash byte string to ed25519 curve point, as specified in:
 /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03 (section 5.4.1.2).
-fn hash_to_curve(pk: &VrfPublicKey, bytes: &[u8]) -> Result<EdwardsPoint, VrfError> {
+fn hash_to_curve(pk: &VrfPublicKey, bytes: &[u8]) -> EdwardsPoint {
     let s = [&SUITE_STRING, &[0x01], &pk.0[..], bytes].concat();
 
     // Hack to avoid forking curve25519_dalek crate because it implements a newer IETF draft:
@@ -256,7 +256,7 @@ fn hash_to_curve(pk: &VrfPublicKey, bytes: &[u8]) -> Result<EdwardsPoint, VrfErr
     let mut h = Sha512::digest(&s);
     h[31] &= 0x7F;
 
-    Ok(EdwardsPoint::hash_from_bytes::<TruncHasher>(&h))
+    EdwardsPoint::hash_from_bytes::<TruncHasher>(&h)
 }
 
 /// Deterministically generates nonce, as specified in:
@@ -271,11 +271,10 @@ fn gen_nonce(sk: &[u8; 32], data: &[u8]) -> Scalar {
 
 /// Hash points into a scalar, as specified in:
 /// https://tools.ietf.org/pdf/draft-irtf-cfrg-vrf-03 (section 5.4.3).
-fn hash_points(points: Vec<EdwardsPoint>) -> Scalar {
+fn hash_points(points: &[EdwardsPoint]) -> Scalar {
     let points_str: Vec<u8> = points
         .iter()
-        .map(|p| p.compress().to_bytes())
-        .flatten()
+        .flat_map(|p| p.compress().to_bytes())
         .collect();
     let s = [&SUITE_STRING, &[0x02], points_str.as_slice()].concat();
     let h = Sha512::digest(&s);
@@ -341,7 +340,7 @@ mod tests {
         let kp = VrfKeypair::from_seed(seed);
         assert_eq!(kp.public(), pk);
 
-        let hash_calculated = hash_to_curve(&kp.public, alpha).unwrap();
+        let hash_calculated = hash_to_curve(&kp.public, alpha);
         assert_eq!(hash_calculated.compress().to_bytes(), hash);
 
         let pi_calculated = kp.prove_bytes(alpha).unwrap();
