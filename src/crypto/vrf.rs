@@ -16,6 +16,7 @@ use data_encoding::BASE64;
 use ed25519_dalek::{ExpandedSecretKey, PublicKey, SecretKey};
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
+use sha2::digest::{FixedOutput, HashMarker, OutputSizeUser, Update};
 use sha2::{Digest, Sha512};
 use thiserror::Error;
 
@@ -208,35 +209,21 @@ impl Default for VrfOutput {
 #[derive(Default)]
 struct TruncHasher(Vec<u8>);
 
-impl Digest for TruncHasher {
+impl HashMarker for TruncHasher {}
+
+impl OutputSizeUser for TruncHasher {
     type OutputSize = generic_array::typenum::U64;
+}
 
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn update(&mut self, data: impl AsRef<[u8]>) {
+impl Update for TruncHasher {
+    fn update(&mut self, data: &[u8]) {
         self.0.extend_from_slice(data.as_ref());
     }
+}
 
-    fn finalize(self) -> GenericArray<u8, Self::OutputSize> {
-        *GenericArray::from_slice(&self.0[..=63])
-    }
-
-    fn chain(self, _: impl AsRef<[u8]>) -> Self {
-        unimplemented!()
-    }
-    fn finalize_reset(&mut self) -> GenericArray<u8, Self::OutputSize> {
-        unimplemented!()
-    }
-    fn reset(&mut self) {
-        unimplemented!()
-    }
-    fn output_size() -> usize {
-        unimplemented!()
-    }
-    fn digest(_: &[u8]) -> GenericArray<u8, Self::OutputSize> {
-        unimplemented!()
+impl FixedOutput for TruncHasher {
+    fn finalize_into(self, out: &mut sha2::digest::Output<Self>) {
+        out.copy_from_slice(&self.0[..=63])
     }
 }
 

@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use lazy_static::lazy_static;
-use sha2::{Digest, Sha512Trunc256};
+use sha2::{Digest, Sha512_256};
 
 const BITS_PER_WORD: usize = 11;
 const MNEMONIC_LEN_WORDS: usize = 25;
@@ -135,7 +135,7 @@ fn load_mnemonic_file() -> Vec<String> {
 }
 
 fn checksum(data: &[u8]) -> u32 {
-    let hash = Sha512Trunc256::digest(data);
+    let hash = Sha512_256::digest(data);
     to_base11(&hash[0..2])[0]
 }
 

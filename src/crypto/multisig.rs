@@ -6,7 +6,7 @@ use std::convert::TryInto;
 use ed25519::Signature;
 use ed25519_dalek::{Keypair, PublicKey, Signer};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha512Trunc256};
+use sha2::{Digest, Sha512_256};
 use thiserror::Error;
 
 use crate::crypto::batch_verifier::BatchVerifier;
@@ -73,7 +73,7 @@ impl MultisigAddr {
             buf.extend(pk.as_bytes());
         }
 
-        Ok(Self(Sha512Trunc256::digest(&buf).try_into().unwrap()))
+        Ok(Self(Sha512_256::digest(&buf).try_into().unwrap()))
     }
 
     // MultisigAddrGenWithSubsigs is similar to MultisigAddrGen
