@@ -6,7 +6,7 @@ use std::fmt;
 
 use data_encoding::BASE32_NOPAD;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha512Trunc256};
+use sha2::{Digest, Sha512_256};
 use thiserror::Error;
 
 use crate::protocol;
@@ -79,7 +79,7 @@ impl TryFrom<&str> for CryptoHash {
 
 /// Computes the SHA-512/256 hash of an array of bytes.
 pub fn hash(data: &[u8]) -> CryptoHash {
-    CryptoHash(Sha512Trunc256::digest(data)[..].try_into().unwrap())
+    CryptoHash(Sha512_256::digest(data)[..].try_into().unwrap())
 }
 
 /// Computes a hash of a `Hashable` object and its type.

@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use data_encoding::BASE32_NOPAD;
 use serde::{Deserialize, Serialize, Serializer};
-use sha2::{Digest, Sha512Trunc256};
+use sha2::{Digest, Sha512_256};
 use thiserror::Error;
 
 use crate::crypto;
@@ -41,7 +41,7 @@ impl Address {
     /// Checksum in Algorand are the last 4 bytes of the shortAddress Hash. H(Address)[28..]
     fn checksum(&self) -> Vec<u8> {
         //let short_addr_hash = crypto.Hash(self.0);
-        let short_addr_hash = Sha512Trunc256::digest(&self.0);
+        let short_addr_hash = Sha512_256::digest(&self.0);
         short_addr_hash[short_addr_hash.len() - CHECKSUM_LEN..].to_vec()
     }
 
@@ -63,7 +63,7 @@ impl fmt::Display for Address {
         addr_with_checksum[..32].copy_from_slice(&self.0[..]);
         // calling addr.GetChecksum() here takes 20ns more than just rolling it out, so we'll just repeat that code.
         // let short_addr_hash = crypto.Hash(self.0);
-        let short_addr_hash = Sha512Trunc256::digest(&self.0);
+        let short_addr_hash = Sha512_256::digest(&self.0);
         addr_with_checksum[32..]
             .copy_from_slice(&short_addr_hash[short_addr_hash.len() - CHECKSUM_LEN..]);
         f.write_str(&BASE32_NOPAD.encode(&addr_with_checksum))
@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn unmarshall_checksum_address() {
-        let addr = Sha512Trunc256::digest(b"randomString");
+        let addr = Sha512_256::digest(b"randomString");
         let short_addr = Address(addr.into());
 
         let result = Address::from_str(&short_addr.to_string());
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn wrong_checksum() {
-        let addr = Sha512Trunc256::digest(b"randomString");
+        let addr = Sha512_256::digest(b"randomString");
         let short_addr = Address(addr.into());
 
         let mut short_addr_str = short_addr.to_string();
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn wrong_checksum_space() {
-        let addr = Sha512Trunc256::digest(b"randomString");
+        let addr = Sha512_256::digest(b"randomString");
         let short_addr = Address(addr.into());
 
         let mut short_addr_str = short_addr.to_string();
@@ -152,7 +152,7 @@ mod tests {
 
     #[test]
     fn wrong_address_add_char() {
-        let addr = Sha512Trunc256::digest(b"randomString");
+        let addr = Sha512_256::digest(b"randomString");
         let short_addr = Address(addr.into());
 
         let mut s = "4".to_owned();
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn wrong_address_replace_char() {
-        let addr = Sha512Trunc256::digest(b"randomString");
+        let addr = Sha512_256::digest(b"randomString");
         let short_addr = Address(addr.into());
 
         let mut short_addr_str = short_addr.to_string();
@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn wrong_address_invalid_char() {
-        let addr = Sha512Trunc256::digest(b"randomString");
+        let addr = Sha512_256::digest(b"randomString");
         let short_addr = Address(addr.into());
 
         let mut s = " ".to_owned();
