@@ -19,7 +19,7 @@ dependencies = [
  "lazy_static",
  "maplit",
  "num",
- "rand 0.7.3",
+ "rand 0.8.4",
  "rayon",
  "rmp",
  "rmp-serde",
