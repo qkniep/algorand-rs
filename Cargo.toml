@@ -23,7 +23,7 @@ serde = { version = "1", features = ["derive"] }
 serde_bytes = "0.11"
 serde_json = "1"
 sha2 = "0.9"
-shellexpand = "2"
+shellexpand = "3"
 sled = "0.34"
 statrs = "0.16"
 thiserror = "1"
